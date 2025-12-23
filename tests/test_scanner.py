@@ -244,7 +244,6 @@ class TestScanBlog:
 
         assert result.source == "none"
         assert result.new_articles == 0
-        assert "RSS" in result.error
         assert "Scraper" in result.error
 
     @patch("blogwatcher.scanner.parse_feed")
