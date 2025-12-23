@@ -4,12 +4,12 @@ A Python CLI tool to track blog articles, detect new posts, and manage read/unre
 
 ## Features
 
-- **Dual Source Support** - Tries RSS feeds first, falls back to HTML scraping
-- **Automatic Feed Discovery** - Detects RSS/Atom URLs from blog homepages
-- **Read/Unread Management** - Track which articles you've read
-- **Blog Filtering** - View articles from specific blogs
-- **Duplicate Prevention** - Never tracks the same article twice
-- **Colored CLI Output** - User-friendly terminal interface
+-   **Dual Source Support** - Tries RSS feeds first, falls back to HTML scraping
+-   **Automatic Feed Discovery** - Detects RSS/Atom URLs from blog homepages
+-   **Read/Unread Management** - Track which articles you've read
+-   **Blog Filtering** - View articles from specific blogs
+-   **Duplicate Prevention** - Never tracks the same article twice
+-   **Colored CLI Output** - User-friendly terminal interface
 
 ## Installation
 
@@ -41,7 +41,7 @@ python -m blogwatcher.cli add "No-RSS Blog" https://norss.com --scrape-selector 
 
 ```bash
 # List all tracked blogs
-python -m blogwatcher.cli list-blogs
+python -m blogwatcher.cli blogs
 
 # Remove a blog (and all its articles)
 python -m blogwatcher.cli remove "My Favorite Blog"
@@ -96,8 +96,9 @@ python -m blogwatcher.cli unread 42
 ### Feed Auto-Discovery
 
 BlogWatcher searches for feeds in two ways:
-- Looking for `<link rel="alternate">` tags with RSS/Atom types
-- Checking common feed paths: `/feed`, `/rss`, `/feed.xml`, `/atom.xml`, etc.
+
+-   Looking for `<link rel="alternate">` tags with RSS/Atom types
+-   Checking common feed paths: `/feed`, `/rss`, `/feed.xml`, `/atom.xml`, etc.
 
 ### HTML Scraping
 
@@ -114,15 +115,15 @@ When RSS isn't available, provide a CSS selector that matches article links:
 
 BlogWatcher stores data in SQLite at `~/.blogwatcher/blogwatcher.db`:
 
-- **blogs** - Tracked blogs (name, URL, feed URL, scrape selector)
-- **articles** - Discovered articles (title, URL, dates, read status)
+-   **blogs** - Tracked blogs (name, URL, feed URL, scrape selector)
+-   **articles** - Discovered articles (title, URL, dates, read status)
 
 ## Development
 
 ### Requirements
 
-- Python 3.9+
-- Dependencies: click, feedparser, beautifulsoup4, requests, pyyaml
+-   Python 3.9+
+-   Dependencies: click, feedparser, beautifulsoup4, requests, pyyaml
 
 ### Running Tests
 

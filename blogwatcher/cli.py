@@ -66,7 +66,7 @@ def remove(name: str, yes: bool):
         db.close()
 
 
-@cli.command("list-blogs")
+@cli.command("blogs")
 def list_blogs():
     """List all tracked blogs."""
     db = Database()
@@ -87,7 +87,9 @@ def list_blogs():
             if blog.scrape_selector:
                 click.echo(f"    Selector: {blog.scrape_selector}")
             if blog.last_scanned:
-                click.echo(f"    Last scanned: {blog.last_scanned.strftime('%Y-%m-%d %H:%M')}")
+                click.echo(
+                    f"    Last scanned: {blog.last_scanned.strftime('%Y-%m-%d %H:%M')}"
+                )
             click.echo()
     finally:
         db.close()
@@ -106,7 +108,9 @@ def scan(blog_name: Optional[str]):
         if blog_name:
             result = scan_blog_by_name(db, blog_name)
             if result is None:
-                click.echo(click.style(f"Error: Blog '{blog_name}' not found", fg="red"))
+                click.echo(
+                    click.style(f"Error: Blog '{blog_name}' not found", fg="red")
+                )
                 raise SystemExit(1)
 
             _print_scan_result(result)
@@ -129,7 +133,11 @@ def scan(blog_name: Optional[str]):
             click.echo()
             if total_new > 0:
                 click.echo(
-                    click.style(f"Found {total_new} new article(s) total!", fg="green", bold=True)
+                    click.style(
+                        f"Found {total_new} new article(s) total!",
+                        fg="green",
+                        bold=True,
+                    )
                 )
             else:
                 click.echo(click.style("No new articles found.", fg="yellow"))
@@ -157,7 +165,9 @@ def _print_scan_result(result):
 
 
 @cli.command()
-@click.option("--all", "-a", "show_all", is_flag=True, help="Show all articles (including read)")
+@click.option(
+    "--all", "-a", "show_all", is_flag=True, help="Show all articles (including read)"
+)
 @click.option("--blog", "-b", "blog_name", help="Filter by blog name")
 def articles(show_all: bool, blog_name: Optional[str]):
     """List articles.
@@ -176,7 +186,9 @@ def articles(show_all: bool, blog_name: Optional[str]):
             return
 
         label = "All articles" if show_all else "Unread articles"
-        click.echo(click.style(f"{label} ({len(articles_list)}):", fg="cyan", bold=True))
+        click.echo(
+            click.style(f"{label} ({len(articles_list)}):", fg="cyan", bold=True)
+        )
         click.echo()
 
         for article in articles_list:
@@ -190,7 +202,11 @@ def articles(show_all: bool, blog_name: Optional[str]):
 
 def _print_article(article, blog_name: str):
     """Print a single article."""
-    status = click.style("[read]", fg="bright_black") if article.is_read else click.style("[new]", fg="yellow")
+    status = (
+        click.style("[read]", fg="bright_black")
+        if article.is_read
+        else click.style("[new]", fg="yellow")
+    )
     id_str = click.style(f"[{article.id}]", fg="cyan")
 
     click.echo(f"  {id_str} {status} {article.title}")
@@ -259,7 +275,9 @@ def unread(article_id: int):
         if not article.is_read:
             click.echo(f"Article {article_id} is already marked as unread.")
         else:
-            click.echo(click.style(f"Marked article {article_id} as unread", fg="green"))
+            click.echo(
+                click.style(f"Marked article {article_id} as unread", fg="green")
+            )
     except ArticleNotFoundError as e:
         click.echo(click.style(f"Error: {e}", fg="red"))
         raise SystemExit(1)
