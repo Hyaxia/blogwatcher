@@ -14,12 +14,12 @@ A Python CLI tool to track blog articles, detect new posts, and manage read/unre
 ## Installation
 
 ```bash
-# Create virtual environment (optional but recommended)
-python -m venv venv
-source venv/bin/activate
+# with UV
+uv pip install --system git+https://github.com/Hyaxia/blogwatcher
 
-# Install dependencies
-pip install -r requirements.txt
+# with pip
+pip install git+https://github.com/Hyaxia/blogwatcher
+
 ```
 
 ## Usage
