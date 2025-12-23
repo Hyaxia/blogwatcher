@@ -97,7 +97,8 @@ def list_blogs():
 
 @cli.command()
 @click.argument("blog_name", required=False)
-def scan(blog_name: Optional[str]):
+@click.option("--silent", "-s", is_flag=True, help="Only output 'scan done' when complete")
+def scan(blog_name: Optional[str], silent: bool):
     """Scan blogs for new articles.
 
     If BLOG_NAME is provided, only that blog is scanned.
@@ -113,34 +114,41 @@ def scan(blog_name: Optional[str]):
                 )
                 raise SystemExit(1)
 
-            _print_scan_result(result)
+            if not silent:
+                _print_scan_result(result)
         else:
             blogs = db.list_blogs()
             if not blogs:
                 click.echo("No blogs tracked yet. Use 'blogwatcher add' to add one.")
                 return
 
-            click.echo(click.style(f"Scanning {len(blogs)} blog(s)...", fg="cyan"))
-            click.echo()
+            if not silent:
+                click.echo(click.style(f"Scanning {len(blogs)} blog(s)...", fg="cyan"))
+                click.echo()
 
             results = scan_all_blogs(db)
             total_new = 0
 
             for result in results:
-                _print_scan_result(result)
+                if not silent:
+                    _print_scan_result(result)
                 total_new += result.new_articles
 
-            click.echo()
-            if total_new > 0:
-                click.echo(
-                    click.style(
-                        f"Found {total_new} new article(s) total!",
-                        fg="green",
-                        bold=True,
+            if not silent:
+                click.echo()
+                if total_new > 0:
+                    click.echo(
+                        click.style(
+                            f"Found {total_new} new article(s) total!",
+                            fg="green",
+                            bold=True,
+                        )
                     )
-                )
-            else:
-                click.echo(click.style("No new articles found.", fg="yellow"))
+                else:
+                    click.echo(click.style("No new articles found.", fg="yellow"))
+
+        if silent:
+            click.echo("scan done")
     finally:
         db.close()
 
