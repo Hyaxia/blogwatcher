@@ -1,12 +1,21 @@
 """CLI commands for BlogWatcher."""
 
-import sqlite3
 from typing import Optional
 
 import click
 
+from .controllers import (
+    ArticleNotFoundError,
+    BlogAlreadyExistsError,
+    BlogNotFoundError,
+    add_blog,
+    get_articles,
+    mark_all_articles_read,
+    mark_article_read,
+    mark_article_unread,
+    remove_blog,
+)
 from .db import Database
-from .models import Blog
 from .scanner import scan_all_blogs, scan_blog_by_name
 
 
@@ -26,27 +35,10 @@ def add(name: str, url: str, feed_url: Optional[str], scrape_selector: Optional[
     """Add a new blog to track."""
     db = Database()
     try:
-        # Check if blog with same name exists
-        if db.get_blog_by_name(name):
-            click.echo(click.style(f"Error: Blog '{name}' already exists", fg="red"))
-            raise SystemExit(1)
-
-        # Check if blog with same URL exists
-        if db.get_blog_by_url(url):
-            click.echo(click.style(f"Error: Blog with URL '{url}' already exists", fg="red"))
-            raise SystemExit(1)
-
-        blog = Blog(
-            id=None,
-            name=name,
-            url=url,
-            feed_url=feed_url,
-            scrape_selector=scrape_selector,
-        )
-        db.add_blog(blog)
+        add_blog(db, name, url, feed_url, scrape_selector)
         click.echo(click.style(f"Added blog '{name}'", fg="green"))
-    except sqlite3.IntegrityError:
-        click.echo(click.style(f"Error: Blog with URL '{url}' already exists", fg="red"))
+    except BlogAlreadyExistsError as e:
+        click.echo(click.style(f"Error: {e}", fg="red"))
         raise SystemExit(1)
     finally:
         db.close()
@@ -59,19 +51,17 @@ def remove(name: str, yes: bool):
     """Remove a blog from tracking."""
     db = Database()
     try:
-        blog = db.get_blog_by_name(name)
-        if not blog:
-            click.echo(click.style(f"Error: Blog '{name}' not found", fg="red"))
-            raise SystemExit(1)
-
         if not yes:
             click.confirm(
                 f"Remove blog '{name}' and all its articles?",
                 abort=True,
             )
 
-        db.remove_blog(blog.id)
+        remove_blog(db, name)
         click.echo(click.style(f"Removed blog '{name}'", fg="green"))
+    except BlogNotFoundError as e:
+        click.echo(click.style(f"Error: {e}", fg="red"))
+        raise SystemExit(1)
     finally:
         db.close()
 
@@ -114,7 +104,6 @@ def scan(blog_name: Optional[str]):
     db = Database()
     try:
         if blog_name:
-            # Scan specific blog
             result = scan_blog_by_name(db, blog_name)
             if result is None:
                 click.echo(click.style(f"Error: Blog '{blog_name}' not found", fg="red"))
@@ -122,7 +111,6 @@ def scan(blog_name: Optional[str]):
 
             _print_scan_result(result)
         else:
-            # Scan all blogs
             blogs = db.list_blogs()
             if not blogs:
                 click.echo("No blogs tracked yet. Use 'blogwatcher add' to add one.")
@@ -178,15 +166,7 @@ def articles(show_all: bool, blog_name: Optional[str]):
     """
     db = Database()
     try:
-        blog_id = None
-        if blog_name:
-            blog = db.get_blog_by_name(blog_name)
-            if not blog:
-                click.echo(click.style(f"Error: Blog '{blog_name}' not found", fg="red"))
-                raise SystemExit(1)
-            blog_id = blog.id
-
-        articles_list = db.list_articles(unread_only=not show_all, blog_id=blog_id)
+        articles_list, blog_names = get_articles(db, show_all, blog_name)
 
         if not articles_list:
             if show_all:
@@ -195,15 +175,15 @@ def articles(show_all: bool, blog_name: Optional[str]):
                 click.echo(click.style("No unread articles!", fg="green"))
             return
 
-        # Get blog names for display
-        blogs = {b.id: b.name for b in db.list_blogs()}
-
         label = "All articles" if show_all else "Unread articles"
         click.echo(click.style(f"{label} ({len(articles_list)}):", fg="cyan", bold=True))
         click.echo()
 
         for article in articles_list:
-            _print_article(article, blogs.get(article.blog_id, "Unknown"))
+            _print_article(article, blog_names.get(article.blog_id, "Unknown"))
+    except BlogNotFoundError as e:
+        click.echo(click.style(f"Error: {e}", fg="red"))
+        raise SystemExit(1)
     finally:
         db.close()
 
@@ -227,17 +207,14 @@ def read(article_id: int):
     """Mark an article as read."""
     db = Database()
     try:
-        article = db.get_article(article_id)
-        if not article:
-            click.echo(click.style(f"Error: Article {article_id} not found", fg="red"))
-            raise SystemExit(1)
-
+        article = mark_article_read(db, article_id)
         if article.is_read:
             click.echo(f"Article {article_id} is already marked as read.")
-            return
-
-        db.mark_article_read(article_id)
-        click.echo(click.style(f"Marked article {article_id} as read", fg="green"))
+        else:
+            click.echo(click.style(f"Marked article {article_id} as read", fg="green"))
+    except ArticleNotFoundError as e:
+        click.echo(click.style(f"Error: {e}", fg="red"))
+        raise SystemExit(1)
     finally:
         db.close()
 
@@ -249,15 +226,8 @@ def read_all(blog_name: Optional[str], yes: bool):
     """Mark all unread articles as read."""
     db = Database()
     try:
-        blog_id = None
-        if blog_name:
-            blog = db.get_blog_by_name(blog_name)
-            if not blog:
-                click.echo(click.style(f"Error: Blog '{blog_name}' not found", fg="red"))
-                raise SystemExit(1)
-            blog_id = blog.id
-
-        articles_list = db.list_articles(unread_only=True, blog_id=blog_id)
+        # Get articles first for confirmation prompt
+        articles_list, _ = get_articles(db, show_all=False, blog_name=blog_name)
 
         if not articles_list:
             click.echo(click.style("No unread articles to mark as read.", fg="green"))
@@ -270,10 +240,11 @@ def read_all(blog_name: Optional[str], yes: bool):
                 abort=True,
             )
 
-        for article in articles_list:
-            db.mark_article_read(article.id)
-
-        click.echo(click.style(f"Marked {len(articles_list)} article(s) as read", fg="green"))
+        marked = mark_all_articles_read(db, blog_name)
+        click.echo(click.style(f"Marked {len(marked)} article(s) as read", fg="green"))
+    except BlogNotFoundError as e:
+        click.echo(click.style(f"Error: {e}", fg="red"))
+        raise SystemExit(1)
     finally:
         db.close()
 
@@ -284,17 +255,14 @@ def unread(article_id: int):
     """Mark an article as unread."""
     db = Database()
     try:
-        article = db.get_article(article_id)
-        if not article:
-            click.echo(click.style(f"Error: Article {article_id} not found", fg="red"))
-            raise SystemExit(1)
-
+        article = mark_article_unread(db, article_id)
         if not article.is_read:
             click.echo(f"Article {article_id} is already marked as unread.")
-            return
-
-        db.mark_article_unread(article_id)
-        click.echo(click.style(f"Marked article {article_id} as unread", fg="green"))
+        else:
+            click.echo(click.style(f"Marked article {article_id} as unread", fg="green"))
+    except ArticleNotFoundError as e:
+        click.echo(click.style(f"Error: {e}", fg="red"))
+        raise SystemExit(1)
     finally:
         db.close()
 
