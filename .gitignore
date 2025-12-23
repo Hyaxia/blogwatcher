@@ -2,3 +2,5 @@ venv/
 .pytest_cache
 list_blogs.txt
 .vscode/
+build/
+blogwatcher.egg-info/
