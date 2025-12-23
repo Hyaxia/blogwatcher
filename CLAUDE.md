@@ -23,6 +23,9 @@ pytest tests/test_db.py::TestDatabaseInitialization::test_database_file_created
 
 # Run tests with verbose output
 pytest -v
+
+# Running the project
+python -m blogwatcher.cli ...
 ```
 
 ## Architecture
