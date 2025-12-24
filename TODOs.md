@@ -1,3 +1,6 @@
+(left this file so that it can use as a reference in the future for what Claude Code
+has generated and later on acted on to create most of the project)
+
 # BlogWatcher - Project Plan
 
 ## Overview
