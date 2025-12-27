@@ -98,7 +98,15 @@ def list_blogs():
 @cli.command()
 @click.argument("blog_name", required=False)
 @click.option("--silent", "-s", is_flag=True, help="Only output 'scan done' when complete")
-def scan(blog_name: Optional[str], silent: bool):
+@click.option(
+    "--workers",
+    "-w",
+    type=click.IntRange(1, 64),
+    default=8,
+    show_default=True,
+    help="Number of concurrent workers when scanning all blogs",
+)
+def scan(blog_name: Optional[str], silent: bool, workers: int):
     """Scan blogs for new articles.
 
     If BLOG_NAME is provided, only that blog is scanned.
@@ -126,7 +134,7 @@ def scan(blog_name: Optional[str], silent: bool):
                 click.echo(click.style(f"Scanning {len(blogs)} blog(s)...", fg="cyan"))
                 click.echo()
 
-            results = scan_all_blogs(db)
+            results = scan_all_blogs(db, workers=workers)
             total_new = 0
 
             for result in results:

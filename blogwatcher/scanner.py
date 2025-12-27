@@ -1,5 +1,6 @@
 """Blog scanning logic for BlogWatcher."""
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -112,23 +113,45 @@ def scan_blog(db: Database, blog: Blog) -> ScanResult:
     )
 
 
-def scan_all_blogs(db: Database) -> list[ScanResult]:
+def scan_all_blogs(db: Database, workers: Optional[int] = None) -> list[ScanResult]:
     """Scan all tracked blogs for new articles.
 
     Args:
         db: Database instance
+        workers: Number of concurrent worker threads (None or 1 for sequential)
 
     Returns:
         List of ScanResult for each blog
     """
     blogs = db.list_blogs()
-    results = []
+    if workers is None or workers <= 1:
+        results = []
+        for blog in blogs:
+            result = scan_blog(db, blog)
+            results.append(result)
+        return results
 
-    for blog in blogs:
-        result = scan_blog(db, blog)
-        results.append(result)
+    results: list[Optional[ScanResult]] = [None] * len(blogs)
+    db_path = db.db_path
 
-    return results
+    def _scan_in_thread(blog: Blog) -> ScanResult:
+        thread_db = Database(db_path)
+        try:
+            return scan_blog(thread_db, blog)
+        finally:
+            thread_db.close()
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_index = {
+            executor.submit(_scan_in_thread, blog): index
+            for index, blog in enumerate(blogs)
+        }
+
+        for future in as_completed(future_to_index):
+            index = future_to_index[future]
+            results[index] = future.result()
+
+    return [result for result in results if result is not None]
 
 
 def scan_blog_by_name(db: Database, name: str) -> Optional[ScanResult]:
