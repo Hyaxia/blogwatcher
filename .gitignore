@@ -4,3 +4,4 @@ list_blogs.txt
 .vscode/
 build/
 blogwatcher.egg-info/
+*/__pycache__
