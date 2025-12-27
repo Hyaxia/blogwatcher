@@ -66,31 +66,39 @@ def scan_blog(db: Database, blog: Blog) -> ScanResult:
                 error = str(e)
 
     # Deduplicate and insert new articles
-    new_count = 0
     seen_urls: set[str] = set()
+    unique_articles: list[FeedArticle | ScrapedArticle] = []
 
     for article in articles:
         # Skip duplicates within the same scan
         if article.url in seen_urls:
             continue
         seen_urls.add(article.url)
+        unique_articles.append(article)
 
+    existing_urls = db.get_existing_article_urls(seen_urls)
+    discovered_at = datetime.now()
+    new_articles = []
+
+    for article in unique_articles:
         # Skip if already in database
-        if db.article_exists(article.url):
+        if article.url in existing_urls:
             continue
 
         # Insert new article
-        db_article = Article(
-            id=None,
-            blog_id=blog.id,
-            title=article.title,
-            url=article.url,
-            published_date=article.published_date,
-            discovered_date=datetime.now(),
-            is_read=False,
+        new_articles.append(
+            Article(
+                id=None,
+                blog_id=blog.id,
+                title=article.title,
+                url=article.url,
+                published_date=article.published_date,
+                discovered_date=discovered_at,
+                is_read=False,
+            )
         )
-        db.add_article(db_article)
-        new_count += 1
+
+    new_count = db.add_articles_bulk(new_articles)
 
     # Update last_scanned timestamp
     db.update_blog_last_scanned(blog.id, datetime.now())

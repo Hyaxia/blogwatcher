@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 from .models import Article, Blog
 
@@ -223,6 +223,44 @@ class Database:
         article.id = cursor.lastrowid
         return article
 
+    def add_articles_bulk(self, articles: list[Article]) -> int:
+        """Add multiple articles in a single transaction.
+
+        Args:
+            articles: Articles to insert
+
+        Returns:
+            Number of articles inserted
+        """
+        if not articles:
+            return 0
+
+        conn = self._get_conn()
+        discovered_at = datetime.now()
+        params = []
+
+        for article in articles:
+            params.append(
+                (
+                    article.blog_id,
+                    article.title,
+                    article.url,
+                    article.published_date,
+                    article.discovered_date or discovered_at,
+                    article.is_read,
+                )
+            )
+
+        conn.executemany(
+            """
+            INSERT INTO articles (blog_id, title, url, published_date, discovered_date, is_read)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            params,
+        )
+        conn.commit()
+        return len(articles)
+
     def get_article(self, article_id: int) -> Optional[Article]:
         """Get an article by id.
 
@@ -261,6 +299,32 @@ class Database:
         conn = self._get_conn()
         row = conn.execute("SELECT 1 FROM articles WHERE url = ?", (url,)).fetchone()
         return row is not None
+
+    def get_existing_article_urls(self, urls: Iterable[str]) -> set[str]:
+        """Return URLs that already exist in the database.
+
+        Args:
+            urls: URLs to check
+
+        Returns:
+            Set of URLs already present in the database
+        """
+        url_list = list(urls)
+        if not url_list:
+            return set()
+
+        conn = self._get_conn()
+        existing: set[str] = set()
+        chunk_size = 900
+
+        for start in range(0, len(url_list), chunk_size):
+            chunk = url_list[start : start + chunk_size]
+            placeholders = ",".join(["?"] * len(chunk))
+            query = f"SELECT url FROM articles WHERE url IN ({placeholders})"
+            rows = conn.execute(query, chunk).fetchall()
+            existing.update(row["url"] for row in rows)
+
+        return existing
 
     def list_articles(self, unread_only: bool = False, blog_id: Optional[int] = None) -> list[Article]:
         """List articles with optional filters.
