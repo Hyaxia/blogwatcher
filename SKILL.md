@@ -6,27 +6,26 @@ description: Use when managing or interacting with favorite blogs via the BlogWa
 # BlogWatcher CLI
 
 ## Quick Orientation
-- Use the Click entry point in `blogwatcher/cli.py`.
-- Route business logic through `blogwatcher/controllers.py` and persistence through `blogwatcher/db.py`.
-- Use scanning pipeline modules in `blogwatcher/scanner.py`, `blogwatcher/rss.py`, and `blogwatcher/scraper.py`.
+- Use the Cobra entry point in `cmd/blogwatcher/main.go` and `internal/cli/`.
+- Route business logic through `internal/controller` and persistence through `internal/storage`.
+- Use scanning pipeline packages in `internal/scanner`, `internal/rss`, and `internal/scraper`.
 - Remember the default SQLite path is `~/.blogwatcher/blogwatcher.db` and is created on demand.
 
 ## Run Commands
-- Prefer `uv run blogwatcher ...` when working locally.
-- Alternatively run `uv run python -m blogwatcher.cli ...`.
-- Use the `blogwatcher` script when installed via the project scripts entry point.
+- Run locally with `go run ./cmd/blogwatcher ...`.
+- Build with `go build ./cmd/blogwatcher`.
 
 ## Change Workflow
-1. Add or adjust CLI commands in `blogwatcher/cli.py` (Click options, arguments, and output formatting).
-2. Put non-trivial logic in `blogwatcher/controllers.py` so CLI stays thin and testable.
-3. Update storage or schema in `blogwatcher/db.py` and adjust model conversion in `blogwatcher/models.py` if needed.
-4. Modify scanning behavior in `blogwatcher/scanner.py` and its helpers (`blogwatcher/rss.py`, `blogwatcher/scraper.py`).
-5. Update or add tests under `tests/` for every feature change or addition.
+1. Add or adjust CLI commands in `internal/cli/commands.go` (Cobra options, arguments, output formatting).
+2. Put non-trivial logic in `internal/controller` so the CLI stays thin and testable.
+3. Update storage or schema in `internal/storage/database.go` and adjust model conversion in `internal/model` if needed.
+4. Modify scanning behavior in `internal/scanner` and its helpers (`internal/rss`, `internal/scraper`).
+5. Update or add tests under `internal/` or `cmd/` for every feature change or addition.
 
 ## Test Guidance
-- Run tests with `uv run pytest`.
+- Run tests with `go test ./...`.
 - If you add a feature, add tests and any necessary dummy data.
-- Keep tests focused on CLI behavior (click invocations), controller logic, and scraper/RSS parsing outcomes.
+- Keep tests focused on CLI behavior, controller logic, and scraper/RSS parsing outcomes.
 
 ## Output Conventions
 - Preserve user-friendly CLI output with colors and clear errors.
