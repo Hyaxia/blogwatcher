@@ -1,6 +1,6 @@
 # BlogWatcher
 
-A Python CLI tool to track blog articles, detect new posts, and manage read/unread status. Supports both RSS/Atom feeds and HTML scraping as fallback.
+A Go CLI tool to track blog articles, detect new posts, and manage read/unread status. Supports both RSS/Atom feeds and HTML scraping as fallback.
 
 ## Features
 
@@ -14,12 +14,11 @@ A Python CLI tool to track blog articles, detect new posts, and manage read/unre
 ## Installation
 
 ```bash
-# with UV
-uv pip install --system git+https://github.com/Hyaxia/blogwatcher
+# Install the CLI
+go install github.com/Hyaxia/blogwatcher/cmd/blogwatcher@latest
 
-# with pip
-pip install git+https://github.com/Hyaxia/blogwatcher
-
+# Or build locally
+go build ./cmd/blogwatcher
 ```
 
 ## Usage
@@ -28,59 +27,59 @@ pip install git+https://github.com/Hyaxia/blogwatcher
 
 ```bash
 # Add a blog (auto-discovers RSS feed)
-python -m blogwatcher.cli add "My Favorite Blog" https://example.com/blog
+blogwatcher add "My Favorite Blog" https://example.com/blog
 
 # Add with explicit feed URL
-python -m blogwatcher.cli add "Tech Blog" https://techblog.com --feed-url https://techblog.com/rss.xml
+blogwatcher add "Tech Blog" https://techblog.com --feed-url https://techblog.com/rss.xml
 
 # Add with HTML scraping selector (for blogs without feeds)
-python -m blogwatcher.cli add "No-RSS Blog" https://norss.com --scrape-selector "article h2 a"
+blogwatcher add "No-RSS Blog" https://norss.com --scrape-selector "article h2 a"
 ```
 
 ### Managing Blogs
 
 ```bash
 # List all tracked blogs
-python -m blogwatcher.cli blogs
+blogwatcher blogs
 
 # Remove a blog (and all its articles)
-python -m blogwatcher.cli remove "My Favorite Blog"
+blogwatcher remove "My Favorite Blog"
 
 # Remove without confirmation
-python -m blogwatcher.cli remove "My Favorite Blog" -y
+blogwatcher remove "My Favorite Blog" -y
 ```
 
 ### Scanning for New Articles
 
 ```bash
 # Scan all blogs for new articles
-python -m blogwatcher.cli scan
+blogwatcher scan
 
 # Scan a specific blog
-python -m blogwatcher.cli scan "Tech Blog"
+blogwatcher scan "Tech Blog"
 ```
 
 ### Viewing Articles
 
 ```bash
 # List unread articles
-python -m blogwatcher.cli articles
+blogwatcher articles
 
 # List all articles (including read)
-python -m blogwatcher.cli articles --all
+blogwatcher articles --all
 
 # List articles from a specific blog
-python -m blogwatcher.cli articles --blog "Tech Blog"
+blogwatcher articles --blog "Tech Blog"
 ```
 
 ### Managing Read Status
 
 ```bash
 # Mark an article as read (use article ID from articles list)
-python -m blogwatcher.cli read 42
+blogwatcher read 42
 
 # Mark an article as unread
-python -m blogwatcher.cli unread 42
+blogwatcher unread 42
 ```
 
 ## How It Works
@@ -122,20 +121,13 @@ BlogWatcher stores data in SQLite at `~/.blogwatcher/blogwatcher.db`:
 
 ### Requirements
 
--   Python 3.9+
--   Dependencies: click, feedparser, beautifulsoup4, requests, pyyaml
+-   Go 1.22+
 
 ### Running Tests
 
 ```bash
 # Run all tests
-pytest
-
-# Run with verbose output
-pytest -v
-
-# Run a specific test
-pytest tests/test_db.py::TestDatabaseInitialization::test_database_file_created
+go test ./...
 ```
 
 ## License

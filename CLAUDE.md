@@ -4,28 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-BlogWatcher is a Python CLI tool to track blog articles, detect new posts, and manage read/unread status. It supports both RSS/Atom feeds and HTML scraping as fallback.
+BlogWatcher is a Go CLI tool to track blog articles, detect new posts, and manage read/unread status. It supports both RSS/Atom feeds and HTML scraping as fallback.
 
 ## Commands
 
 ```bash
-# if needed, use venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
 # Run tests
-pytest
-
-# Run a single test
-pytest tests/test_db.py::TestDatabaseInitialization::test_database_file_created
-
-# Run tests with verbose output
-pytest -v
+go test ./...
 
 # Running the project
-python -m blogwatcher.cli ...
+go run ./cmd/blogwatcher ...
 ```
 
 ## Architecture
@@ -37,9 +25,8 @@ SQLite database stored at `~/.blogwatcher/blogwatcher.db` with two tables:
 
 
 ## Tech Stack
-- Python 3.11+
-- SQLite (standard library)
-- feedparser (RSS/Atom)
-- beautifulsoup4 + requests (HTML scraping)
-- click (CLI)
-- pytest (testing)
+- Go 1.22+
+- SQLite (github.com/mattn/go-sqlite3)
+- gofeed (RSS/Atom)
+- goquery + net/http (HTML scraping)
+- cobra (CLI)
