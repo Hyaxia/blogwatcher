@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 
 	"github.com/Hyaxia/blogwatcher/internal/model"
 )
@@ -42,8 +42,8 @@ func OpenDatabase(path string) (*Database, error) {
 		return nil, err
 	}
 
-	dsn := fmt.Sprintf("file:%s?_busy_timeout=5000&_foreign_keys=1", path)
-	conn, err := sql.Open("sqlite3", dsn)
+	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)", path)
+	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}

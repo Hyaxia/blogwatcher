@@ -126,7 +126,7 @@ BlogWatcher stores data in SQLite at `~/.blogwatcher/blogwatcher.db`:
 
 ### Requirements
 
--   Go 1.22+
+-   Go 1.24+
 
 ### Running Tests
 

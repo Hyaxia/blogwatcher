@@ -25,8 +25,8 @@ SQLite database stored at `~/.blogwatcher/blogwatcher.db` with two tables:
 
 
 ## Tech Stack
-- Go 1.22+
-- SQLite (github.com/mattn/go-sqlite3)
+- Go 1.24+
+- SQLite (modernc.org/sqlite)
 - gofeed (RSS/Atom)
 - goquery + net/http (HTML scraping)
 - cobra (CLI)
