@@ -108,7 +108,7 @@ func TestScanAllBlogsConcurrent(t *testing.T) {
 	defer db.Close()
 
 	for i, name := range []string{"TestA", "TestB"} {
-		_, err := db.AddBlog(model.Blog{Name: name, URL: "https://example.com", FeedURL: server.URL})
+		_, err := db.AddBlog(model.Blog{Name: name, URL: "https://example.com/" + name, FeedURL: server.URL})
 		if err != nil {
 			t.Fatalf("add blog %d: %v", i, err)
 		}
