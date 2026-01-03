@@ -6,23 +6,17 @@ builds:
   - id: blogwatcher
     main: ./cmd/blogwatcher
     binary: blogwatcher
-    goos:
-      - linux
-      - windows
-    goarch:
-      - amd64
     env:
       - CGO_ENABLED=1
-    overrides:
-      - goos: windows
-        env:
-          - CGO_ENABLED=1
-          - CC=x86_64-w64-mingw32-gcc
+    goos:
+      - linux
+    goarch:
+      - amd64
     ldflags:
       - -s -w -X github.com/Hyaxia/blogwatcher/internal/version.Version={{.Version}}
 
 archives:
-  - id: default
+  - id: blogwatcher
     builds:
       - blogwatcher
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
@@ -32,14 +26,20 @@ archives:
         format: zip
 
 checksum:
-  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  name_template: "{{ .ProjectName }}_checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
 
 brews:
   - name: blogwatcher
-    homepage: https://github.com/Hyaxia/blogwatcher
-    description: Track blog articles and detect new posts.
-    license: MIT
-    directory: Formula
+    description: "Track blog articles and detect new posts."
+    homepage: "https://github.com/Hyaxia/blogwatcher"
+    license: "MIT"
     repository:
       owner: Hyaxia
       name: homebrew-tap
