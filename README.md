@@ -135,6 +135,14 @@ BlogWatcher stores data in SQLite at `~/.blogwatcher/blogwatcher.db`:
 go test ./...
 ```
 
+### Publishing
+
+in addition to publishing to main a new tag should be published so homebrew will get the updated version:
+```
+  git tag vX.Y.Z
+  git push origin vX.Y.Z
+```
+
 ## License
 
 MIT
