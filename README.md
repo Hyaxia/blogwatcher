@@ -85,6 +85,12 @@ blogwatcher read 42
 
 # Mark an article as unread
 blogwatcher unread 42
+
+# Mark all unread articles as read
+blogwatcher read-all
+
+# Mark all unread articles as read for a blog (skip prompt)
+blogwatcher read-all --blog "Tech Blog" --yes
 ```
 
 ## How It Works
