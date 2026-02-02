@@ -1,3 +1,3 @@
 package version
 
-var Version = "dev"
+var Version = "dev-marcind"
