@@ -5,9 +5,13 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/Hyaxia/blogwatcher/internal/httputil"
 )
 
 func TestScrapeBlog(t *testing.T) {
+	httputil.AllowPrivate = true
+	t.Cleanup(func() { httputil.AllowPrivate = false })
 	html := `<!DOCTYPE html>
 <html>
 <body>

@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 
+	"github.com/Hyaxia/blogwatcher/internal/httputil"
 	"github.com/Hyaxia/blogwatcher/internal/model"
 	"github.com/Hyaxia/blogwatcher/internal/storage"
 )
@@ -33,6 +34,15 @@ func (e ArticleNotFoundError) Error() string {
 }
 
 func AddBlog(db *storage.Database, name string, url string, feedURL string, scrapeSelector string) (model.Blog, error) {
+	if err := httputil.ValidateURL(url); err != nil {
+		return model.Blog{}, fmt.Errorf("invalid blog URL: %w", err)
+	}
+	if feedURL != "" {
+		if err := httputil.ValidateURL(feedURL); err != nil {
+			return model.Blog{}, fmt.Errorf("invalid feed URL: %w", err)
+		}
+	}
+
 	if existing, err := db.GetBlogByName(name); err != nil {
 		return model.Blog{}, err
 	} else if existing != nil {

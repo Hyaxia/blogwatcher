@@ -3,13 +3,14 @@ package rss
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
+
+	"github.com/Hyaxia/blogwatcher/internal/httputil"
 )
 
 type FeedArticle struct {
@@ -27,7 +28,11 @@ func (e FeedParseError) Error() string {
 }
 
 func ParseFeed(feedURL string, timeout time.Duration) ([]FeedArticle, error) {
-	client := &http.Client{Timeout: timeout}
+	if err := httputil.ValidateURL(feedURL); err != nil {
+		return nil, FeedParseError{Message: fmt.Sprintf("blocked URL: %v", err)}
+	}
+
+	client := httputil.SafeClient(timeout)
 	response, err := client.Get(feedURL)
 	if err != nil {
 		return nil, FeedParseError{Message: fmt.Sprintf("failed to fetch feed: %v", err)}
@@ -38,7 +43,7 @@ func ParseFeed(feedURL string, timeout time.Duration) ([]FeedArticle, error) {
 	}
 
 	parser := gofeed.NewParser()
-	feed, err := parser.Parse(response.Body)
+	feed, err := parser.Parse(httputil.LimitBody(response.Body))
 	if err != nil {
 		return nil, FeedParseError{Message: fmt.Sprintf("failed to parse feed: %v", err)}
 	}
@@ -61,7 +66,11 @@ func ParseFeed(feedURL string, timeout time.Duration) ([]FeedArticle, error) {
 }
 
 func DiscoverFeedURL(blogURL string, timeout time.Duration) (string, error) {
-	client := &http.Client{Timeout: timeout}
+	if err := httputil.ValidateURL(blogURL); err != nil {
+		return "", fmt.Errorf("blocked URL: %w", err)
+	}
+
+	client := httputil.SafeClient(timeout)
 	response, err := client.Get(blogURL)
 	if err != nil {
 		return "", nil
@@ -76,7 +85,7 @@ func DiscoverFeedURL(blogURL string, timeout time.Duration) (string, error) {
 		return "", nil
 	}
 
-	doc, err := goquery.NewDocumentFromReader(response.Body)
+	doc, err := goquery.NewDocumentFromReader(httputil.LimitBody(response.Body))
 	if err != nil {
 		return "", nil
 	}
@@ -130,18 +139,22 @@ func DiscoverFeedURL(blogURL string, timeout time.Duration) (string, error) {
 }
 
 func isValidFeed(feedURL string, timeout time.Duration) (bool, error) {
-	client := &http.Client{Timeout: timeout}
+	if err := httputil.ValidateURL(feedURL); err != nil {
+		return false, err
+	}
+
+	client := httputil.SafeClient(timeout)
 	response, err := client.Get(feedURL)
 	if err != nil {
 		return false, err
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode != 200 {
 		return false, nil
 	}
 
 	parser := gofeed.NewParser()
-	feed, err := parser.Parse(response.Body)
+	feed, err := parser.Parse(httputil.LimitBody(response.Body))
 	if err != nil {
 		return false, err
 	}

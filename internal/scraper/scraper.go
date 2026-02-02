@@ -3,12 +3,13 @@ package scraper
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+
+	"github.com/Hyaxia/blogwatcher/internal/httputil"
 )
 
 type ScrapedArticle struct {
@@ -26,7 +27,11 @@ func (e ScrapeError) Error() string {
 }
 
 func ScrapeBlog(blogURL string, selector string, timeout time.Duration) ([]ScrapedArticle, error) {
-	client := &http.Client{Timeout: timeout}
+	if err := httputil.ValidateURL(blogURL); err != nil {
+		return nil, ScrapeError{Message: fmt.Sprintf("blocked URL: %v", err)}
+	}
+
+	client := httputil.SafeClient(timeout)
 	response, err := client.Get(blogURL)
 	if err != nil {
 		return nil, ScrapeError{Message: fmt.Sprintf("failed to fetch page: %v", err)}
@@ -41,7 +46,7 @@ func ScrapeBlog(blogURL string, selector string, timeout time.Duration) ([]Scrap
 		return nil, ScrapeError{Message: "invalid blog url"}
 	}
 
-	doc, err := goquery.NewDocumentFromReader(response.Body)
+	doc, err := goquery.NewDocumentFromReader(httputil.LimitBody(response.Body))
 	if err != nil {
 		return nil, ScrapeError{Message: fmt.Sprintf("failed to parse page: %v", err)}
 	}

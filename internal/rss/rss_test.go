@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/Hyaxia/blogwatcher/internal/httputil"
 )
 
 const sampleFeed = `<?xml version="1.0" encoding="UTF-8" ?>
@@ -24,6 +26,8 @@ const sampleFeed = `<?xml version="1.0" encoding="UTF-8" ?>
 </rss>`
 
 func TestParseFeed(t *testing.T) {
+	httputil.AllowPrivate = true
+	t.Cleanup(func() { httputil.AllowPrivate = false })
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(sampleFeed))
@@ -43,6 +47,8 @@ func TestParseFeed(t *testing.T) {
 }
 
 func TestDiscoverFeedURL(t *testing.T) {
+	httputil.AllowPrivate = true
+	t.Cleanup(func() { httputil.AllowPrivate = false })
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

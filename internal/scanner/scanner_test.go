@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Hyaxia/blogwatcher/internal/httputil"
 	"github.com/Hyaxia/blogwatcher/internal/model"
 	"github.com/Hyaxia/blogwatcher/internal/storage"
 )
@@ -27,6 +28,8 @@ const sampleFeed = `<?xml version="1.0" encoding="UTF-8" ?>
 </rss>`
 
 func TestScanBlogRSS(t *testing.T) {
+	httputil.AllowPrivate = true
+	t.Cleanup(func() { httputil.AllowPrivate = false })
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(sampleFeed))
@@ -59,6 +62,8 @@ func TestScanBlogRSS(t *testing.T) {
 }
 
 func TestScanBlogScraperFallback(t *testing.T) {
+	httputil.AllowPrivate = true
+	t.Cleanup(func() { httputil.AllowPrivate = false })
 	html := `<!DOCTYPE html>
 <html>
 <body>
@@ -98,6 +103,8 @@ func TestScanBlogScraperFallback(t *testing.T) {
 }
 
 func TestScanAllBlogsConcurrent(t *testing.T) {
+	httputil.AllowPrivate = true
+	t.Cleanup(func() { httputil.AllowPrivate = false })
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(sampleFeed))
@@ -134,6 +141,8 @@ func openTestDB(t *testing.T) *storage.Database {
 }
 
 func TestScanBlogRespectsExistingArticles(t *testing.T) {
+	httputil.AllowPrivate = true
+	t.Cleanup(func() { httputil.AllowPrivate = false })
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(sampleFeed))

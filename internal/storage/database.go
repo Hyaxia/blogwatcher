@@ -38,8 +38,17 @@ func OpenDatabase(path string) (*Database, error) {
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
+	}
+
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("database directory is a symlink: %s", dir)
 	}
 
 	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)", path)
