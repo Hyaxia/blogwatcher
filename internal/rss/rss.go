@@ -10,6 +10,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
+
+	"github.com/Hyaxia/blogwatcher/internal/safeclient"
 )
 
 type FeedArticle struct {
@@ -27,8 +29,7 @@ func (e FeedParseError) Error() string {
 }
 
 func ParseFeed(feedURL string, timeout time.Duration) ([]FeedArticle, error) {
-	client := &http.Client{Timeout: timeout}
-	response, err := client.Get(feedURL)
+	response, err := safeclient.SafeGet(feedURL, timeout)
 	if err != nil {
 		return nil, FeedParseError{Message: fmt.Sprintf("failed to fetch feed: %v", err)}
 	}
@@ -61,8 +62,7 @@ func ParseFeed(feedURL string, timeout time.Duration) ([]FeedArticle, error) {
 }
 
 func DiscoverFeedURL(blogURL string, timeout time.Duration) (string, error) {
-	client := &http.Client{Timeout: timeout}
-	response, err := client.Get(blogURL)
+	response, err := safeclient.SafeGet(blogURL, timeout)
 	if err != nil {
 		return "", nil
 	}
@@ -130,8 +130,7 @@ func DiscoverFeedURL(blogURL string, timeout time.Duration) (string, error) {
 }
 
 func isValidFeed(feedURL string, timeout time.Duration) (bool, error) {
-	client := &http.Client{Timeout: timeout}
-	response, err := client.Get(feedURL)
+	response, err := safeclient.SafeGet(feedURL, timeout)
 	if err != nil {
 		return false, err
 	}

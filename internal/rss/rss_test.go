@@ -3,9 +3,17 @@ package rss
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/Hyaxia/blogwatcher/internal/safeclient"
 )
+
+func TestMain(m *testing.M) {
+	safeclient.SetTestAllowPrivate(true)
+	os.Exit(m.Run())
+}
 
 const sampleFeed = `<?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0">
