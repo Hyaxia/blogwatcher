@@ -23,7 +23,7 @@ func TestScrapeBlog(t *testing.T) {
 	}))
 	defer server.Close()
 
-	articles, err := ScrapeBlog(server.URL, "article h2 a, .post", 2*time.Second)
+	articles, err := ScrapeBlog(server.URL, "article h2 a, .post", 2*time.Second, "")
 	if err != nil {
 		t.Fatalf("scrape blog: %v", err)
 	}

@@ -25,9 +25,9 @@ func (e ScrapeError) Error() string {
 	return e.Message
 }
 
-func ScrapeBlog(blogURL string, selector string, timeout time.Duration) ([]ScrapedArticle, error) {
+func ScrapeBlog(blogURL string, selector string, timeout time.Duration, userAgent string) ([]ScrapedArticle, error) {
 	client := &http.Client{Timeout: timeout}
-	response, err := client.Get(blogURL)
+	response, err := getWithOptionalUserAgent(client, blogURL, userAgent)
 	if err != nil {
 		return nil, ScrapeError{Message: fmt.Sprintf("failed to fetch page: %v", err)}
 	}
@@ -101,6 +101,17 @@ func extractTitle(link *goquery.Selection, parent *goquery.Selection) string {
 		}
 	}
 	return ""
+}
+
+func getWithOptionalUserAgent(client *http.Client, targetURL string, userAgent string) (*http.Response, error) {
+	request, err := http.NewRequest(http.MethodGet, targetURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(userAgent) != "" {
+		request.Header.Set("User-Agent", userAgent)
+	}
+	return client.Do(request)
 }
 
 func resolveURL(base *url.URL, href string) string {

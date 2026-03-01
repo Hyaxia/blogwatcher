@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Hyaxia/blogwatcher/internal/model"
@@ -18,6 +19,12 @@ type ScanResult struct {
 	Error       string
 }
 
+var httpUserAgent string
+
+func SetHTTPUserAgent(userAgent string) {
+	httpUserAgent = strings.TrimSpace(userAgent)
+}
+
 func ScanBlog(db *storage.Database, blog model.Blog) ScanResult {
 	var (
 		articles []model.Article
@@ -27,7 +34,7 @@ func ScanBlog(db *storage.Database, blog model.Blog) ScanResult {
 
 	feedURL := blog.FeedURL
 	if feedURL == "" {
-		if discovered, err := rss.DiscoverFeedURL(blog.URL, 30*time.Second); err == nil && discovered != "" {
+		if discovered, err := rss.DiscoverFeedURL(blog.URL, 30*time.Second, httpUserAgent); err == nil && discovered != "" {
 			feedURL = discovered
 			blog.FeedURL = discovered
 			_ = db.UpdateBlog(blog)
@@ -35,7 +42,7 @@ func ScanBlog(db *storage.Database, blog model.Blog) ScanResult {
 	}
 
 	if feedURL != "" {
-		feedArticles, err := rss.ParseFeed(feedURL, 30*time.Second)
+		feedArticles, err := rss.ParseFeed(feedURL, 30*time.Second, httpUserAgent)
 		if err != nil {
 			errText = err.Error()
 		} else {
@@ -45,7 +52,7 @@ func ScanBlog(db *storage.Database, blog model.Blog) ScanResult {
 	}
 
 	if len(articles) == 0 && blog.ScrapeSelector != "" {
-		scrapedArticles, err := scraper.ScrapeBlog(blog.URL, blog.ScrapeSelector, 30*time.Second)
+		scrapedArticles, err := scraper.ScrapeBlog(blog.URL, blog.ScrapeSelector, 30*time.Second, httpUserAgent)
 		if err != nil {
 			if errText != "" {
 				errText = fmt.Sprintf("RSS: %s; Scraper: %s", errText, err.Error())
