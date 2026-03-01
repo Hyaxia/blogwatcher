@@ -19,12 +19,6 @@ type ScanResult struct {
 	Error       string
 }
 
-var httpUserAgent string
-
-func SetHTTPUserAgent(userAgent string) {
-	httpUserAgent = strings.TrimSpace(userAgent)
-}
-
 func ScanBlog(db *storage.Database, blog model.Blog) ScanResult {
 	var (
 		articles []model.Article
@@ -33,10 +27,7 @@ func ScanBlog(db *storage.Database, blog model.Blog) ScanResult {
 	)
 
 	feedURL := blog.FeedURL
-	effectiveUserAgent := blog.UserAgent
-	if strings.TrimSpace(effectiveUserAgent) == "" {
-		effectiveUserAgent = httpUserAgent
-	}
+	effectiveUserAgent := strings.TrimSpace(blog.UserAgent)
 
 	if feedURL == "" {
 		if discovered, err := rss.DiscoverFeedURL(blog.URL, 30*time.Second, effectiveUserAgent); err == nil && discovered != "" {
