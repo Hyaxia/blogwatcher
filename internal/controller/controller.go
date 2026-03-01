@@ -32,7 +32,7 @@ func (e ArticleNotFoundError) Error() string {
 	return fmt.Sprintf("Article %d not found", e.ID)
 }
 
-func AddBlog(db *storage.Database, name string, url string, feedURL string, scrapeSelector string) (model.Blog, error) {
+func AddBlog(db *storage.Database, name string, url string, feedURL string, scrapeSelector string, userAgent string) (model.Blog, error) {
 	if existing, err := db.GetBlogByName(name); err != nil {
 		return model.Blog{}, err
 	} else if existing != nil {
@@ -49,6 +49,7 @@ func AddBlog(db *storage.Database, name string, url string, feedURL string, scra
 		URL:            url,
 		FeedURL:        feedURL,
 		ScrapeSelector: scrapeSelector,
+		UserAgent:      userAgent,
 	}
 	return db.AddBlog(blog)
 }

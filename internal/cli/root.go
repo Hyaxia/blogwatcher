@@ -23,7 +23,7 @@ func NewRootCommand() *cobra.Command {
 	}
 	rootCmd.Version = version.Version
 	rootCmd.SetVersionTemplate("{{.Version}}\n")
-	rootCmd.PersistentFlags().StringVar(&userAgent, "user-agent", "", "Custom HTTP User-Agent for feed/scrape requests")
+	rootCmd.PersistentFlags().StringVar(&userAgent, "user-agent", "", "Global HTTP User-Agent fallback for feed/scrape requests")
 	rootCmd.AddCommand(newAddCommand())
 	rootCmd.AddCommand(newRemoveCommand())
 	rootCmd.AddCommand(newBlogsCommand())

@@ -39,6 +39,9 @@ blogwatcher add "Tech Blog" https://techblog.com --feed-url https://techblog.com
 
 # Add with HTML scraping selector (for blogs without feeds)
 blogwatcher add "No-RSS Blog" https://norss.com --scrape-selector "article h2 a"
+
+# Add with per-blog User-Agent override
+blogwatcher add "Blocked Blog" https://blocked.example --feed-url https://blocked.example/feed --user-agent "Mozilla/5.0 ..."
 ```
 
 ### Managing Blogs
@@ -63,7 +66,7 @@ blogwatcher scan
 # Scan a specific blog
 blogwatcher scan "Tech Blog"
 
-# Scan with a custom User-Agent (useful when sites block default Go UA)
+# Scan with a global User-Agent fallback (used when a blog has no per-blog --user-agent)
 blogwatcher --user-agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" scan
 ```
 
