@@ -62,6 +62,9 @@ blogwatcher scan
 
 # Scan a specific blog
 blogwatcher scan "Tech Blog"
+
+# Scan with a custom User-Agent (useful when sites block default Go UA)
+blogwatcher --user-agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" scan
 ```
 
 ### Viewing Articles
