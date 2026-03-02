@@ -9,7 +9,7 @@ description: Use when managing or interacting with favorite blogs via the BlogWa
 - Use the Cobra entry point in `cmd/blogwatcher/main.go` and `internal/cli/`.
 - Route business logic through `internal/controller` and persistence through `internal/storage`.
 - Use scanning pipeline packages in `internal/scanner`, `internal/rss`, and `internal/scraper`.
-- Remember the default SQLite path is `~/.blogwatcher/blogwatcher.db` and is created on demand.
+- Remember the default SQLite path is `~/.blogwatcher/blogwatcher.db` (override with `BLOGWATCHER_DB`) and is created on demand.
 
 ## Run Commands
 - Run locally with `go run ./cmd/blogwatcher ...`.

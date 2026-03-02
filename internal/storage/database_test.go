@@ -3,6 +3,7 @@ package storage
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,6 +83,46 @@ func TestDatabaseCreatesFileAndCRUD(t *testing.T) {
 	}
 	if !deleted {
 		t.Fatalf("expected blog removal")
+	}
+}
+
+func TestDefaultDBPathUsesEnvOverride(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "isolated", "blogwatcher.db")
+	t.Setenv("BLOGWATCHER_DB", path)
+
+	got, err := DefaultDBPath()
+	if err != nil {
+		t.Fatalf("resolve default db path: %v", err)
+	}
+	if got != path {
+		t.Fatalf("expected env override path %q, got %q", path, got)
+	}
+
+	db, err := OpenDatabase("")
+	if err != nil {
+		t.Fatalf("open database with env override: %v", err)
+	}
+	defer db.Close()
+
+	if db.Path() != path {
+		t.Fatalf("expected database path %q, got %q", path, db.Path())
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected overridden db file to exist: %v", err)
+	}
+}
+
+func TestDefaultDBPathFallsBackWhenEnvIsEmpty(t *testing.T) {
+	t.Setenv("BLOGWATCHER_DB", "")
+
+	got, err := DefaultDBPath()
+	if err != nil {
+		t.Fatalf("resolve default db path: %v", err)
+	}
+
+	expectedSuffix := filepath.Join(".blogwatcher", "blogwatcher.db")
+	if !strings.HasSuffix(got, expectedSuffix) {
+		t.Fatalf("expected default path to end with %q, got %q", expectedSuffix, got)
 	}
 }
 
