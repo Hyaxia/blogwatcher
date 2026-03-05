@@ -73,7 +73,7 @@ func TestGetArticlesFilters(t *testing.T) {
 		t.Fatalf("add article: %v", err)
 	}
 
-	articles, blogNames, err := GetArticles(db, false, "")
+	articles, blogNames, err := GetArticles(db, false, "", "")
 	if err != nil {
 		t.Fatalf("get articles: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestGetArticlesFilters(t *testing.T) {
 		t.Fatalf("expected blog name")
 	}
 
-	if _, _, err := GetArticles(db, false, "Missing"); err == nil {
+	if _, _, err := GetArticles(db, false, "Missing", ""); err == nil {
 		t.Fatalf("expected blog not found error")
 	}
 }

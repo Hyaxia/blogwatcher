@@ -43,7 +43,6 @@ func AddBlog(db *storage.Database, name string, url string, feedURL string, scra
 	} else if existing != nil {
 		return model.Blog{}, BlogAlreadyExistsError{Field: "URL", Value: url}
 	}
-
 	blog := model.Blog{
 		Name:           name,
 		URL:            url,
@@ -65,7 +64,7 @@ func RemoveBlog(db *storage.Database, name string) error {
 	return err
 }
 
-func GetArticles(db *storage.Database, showAll bool, blogName string) ([]model.Article, map[int64]string, error) {
+func GetArticles(db *storage.Database, showAll bool, blogName string, category string) ([]model.Article, map[int64]string, error) {
 	var blogID *int64
 	if blogName != "" {
 		blog, err := db.GetBlogByName(blogName)
@@ -77,8 +76,11 @@ func GetArticles(db *storage.Database, showAll bool, blogName string) ([]model.A
 		}
 		blogID = &blog.ID
 	}
-
-	articles, err := db.ListArticles(!showAll, blogID)
+	var categoryPtr *string
+	if category != "" {
+		categoryPtr = &category
+	}
+	articles, err := db.ListArticles(!showAll, blogID, categoryPtr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -90,7 +92,6 @@ func GetArticles(db *storage.Database, showAll bool, blogName string) ([]model.A
 	for _, blog := range blogs {
 		blogNames[blog.ID] = blog.Name
 	}
-
 	return articles, blogNames, nil
 }
 
@@ -123,19 +124,16 @@ func MarkAllArticlesRead(db *storage.Database, blogName string) ([]model.Article
 		}
 		blogID = &blog.ID
 	}
-
-	articles, err := db.ListArticles(true, blogID)
+	articles, err := db.ListArticles(true, blogID, nil)
 	if err != nil {
 		return nil, err
 	}
-
 	for _, article := range articles {
 		_, err := db.MarkArticleRead(article.ID)
 		if err != nil {
 			return nil, err
 		}
 	}
-
 	return articles, nil
 }
 

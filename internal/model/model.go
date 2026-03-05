@@ -19,4 +19,5 @@ type Article struct {
 	PublishedDate  *time.Time
 	DiscoveredDate *time.Time
 	IsRead         bool
+	Categories     []string
 }
