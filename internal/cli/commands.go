@@ -322,6 +322,34 @@ func newReadAllCommand() *cobra.Command {
 	return cmd
 }
 
+func newImportCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "import <file>",
+		Short: "Import blogs from an OPML file.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			f, err := os.Open(args[0])
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			db, err := storage.OpenDatabase("")
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			added, skipped, err := controller.ImportOPML(db, f)
+			if err != nil {
+				printError(err)
+				return markError(err)
+			}
+			color.New(color.FgGreen).Printf("Imported %d blogs, skipped %d duplicates\n", added, skipped)
+			return nil
+		},
+	}
+	return cmd
+}
+
 func newUnreadCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unread <article_id>",
