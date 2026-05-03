@@ -3,9 +3,17 @@ package scraper
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/Hyaxia/blogwatcher/internal/safeclient"
 )
+
+func TestMain(m *testing.M) {
+	safeclient.SetTestAllowPrivate(true)
+	os.Exit(m.Run())
+}
 
 func TestScrapeBlog(t *testing.T) {
 	html := `<!DOCTYPE html>

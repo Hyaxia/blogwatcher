@@ -3,12 +3,13 @@ package scraper
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+
+	"github.com/Hyaxia/blogwatcher/internal/safeclient"
 )
 
 type ScrapedArticle struct {
@@ -26,8 +27,7 @@ func (e ScrapeError) Error() string {
 }
 
 func ScrapeBlog(blogURL string, selector string, timeout time.Duration) ([]ScrapedArticle, error) {
-	client := &http.Client{Timeout: timeout}
-	response, err := client.Get(blogURL)
+	response, err := safeclient.SafeGet(blogURL, timeout)
 	if err != nil {
 		return nil, ScrapeError{Message: fmt.Sprintf("failed to fetch page: %v", err)}
 	}

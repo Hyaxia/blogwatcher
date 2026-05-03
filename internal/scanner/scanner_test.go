@@ -3,13 +3,20 @@ package scanner
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/Hyaxia/blogwatcher/internal/model"
+	"github.com/Hyaxia/blogwatcher/internal/safeclient"
 	"github.com/Hyaxia/blogwatcher/internal/storage"
 )
+
+func TestMain(m *testing.M) {
+	safeclient.SetTestAllowPrivate(true)
+	os.Exit(m.Run())
+}
 
 const sampleFeed = `<?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0">
