@@ -49,7 +49,7 @@ func TestScanBlogRSS(t *testing.T) {
 		t.Fatalf("expected rss source, got %s", result.Source)
 	}
 
-	articles, err := db.ListArticles(false, nil)
+	articles, err := db.ListArticles(false, nil, nil)
 	if err != nil {
 		t.Fatalf("list articles: %v", err)
 	}

@@ -195,6 +195,7 @@ func newScanCommand() *cobra.Command {
 func newArticlesCommand() *cobra.Command {
 	var showAll bool
 	var blogName string
+	var category string
 
 	cmd := &cobra.Command{
 		Use:   "articles",
@@ -205,7 +206,7 @@ func newArticlesCommand() *cobra.Command {
 				return err
 			}
 			defer db.Close()
-			articles, blogNames, err := controller.GetArticles(db, showAll, blogName)
+			articles, blogNames, err := controller.GetArticles(db, showAll, blogName, category)
 			if err != nil {
 				printError(err)
 				return markError(err)
@@ -233,6 +234,7 @@ func newArticlesCommand() *cobra.Command {
 
 	cmd.Flags().BoolVarP(&showAll, "all", "a", false, "Show all articles (including read)")
 	cmd.Flags().StringVarP(&blogName, "blog", "b", "", "Filter by blog name")
+	cmd.Flags().StringVarP(&category, "category", "c", "", "Filter by category")
 	return cmd
 }
 
@@ -281,7 +283,7 @@ func newReadAllCommand() *cobra.Command {
 			}
 			defer db.Close()
 
-			articles, blogNames, err := controller.GetArticles(db, false, blogName)
+			articles, blogNames, err := controller.GetArticles(db, false, blogName, "")
 			if err != nil {
 				printError(err)
 				return markError(err)

@@ -51,7 +51,7 @@ func TestDatabaseCreatesFileAndCRUD(t *testing.T) {
 		t.Fatalf("expected 2 articles, got %d", count)
 	}
 
-	list, err := db.ListArticles(false, nil)
+	list, err := db.ListArticles(false, nil, nil)
 	if err != nil {
 		t.Fatalf("list articles: %v", err)
 	}
@@ -306,7 +306,7 @@ func TestListArticlesFiltersAndOrdering(t *testing.T) {
 		t.Fatalf("mark read: %v", err)
 	}
 
-	all, err := db.ListArticles(false, nil)
+	all, err := db.ListArticles(false, nil, nil)
 	if err != nil {
 		t.Fatalf("list articles: %v", err)
 	}
@@ -317,7 +317,7 @@ func TestListArticlesFiltersAndOrdering(t *testing.T) {
 		t.Fatalf("expected newest article first")
 	}
 
-	unread, err := db.ListArticles(true, nil)
+	unread, err := db.ListArticles(true, nil, nil)
 	if err != nil {
 		t.Fatalf("list unread: %v", err)
 	}
@@ -326,7 +326,7 @@ func TestListArticlesFiltersAndOrdering(t *testing.T) {
 	}
 
 	blogID := blogB.ID
-	filtered, err := db.ListArticles(false, &blogID)
+	filtered, err := db.ListArticles(false, &blogID, nil)
 	if err != nil {
 		t.Fatalf("list by blog: %v", err)
 	}
@@ -366,7 +366,7 @@ func TestBulkInsertDuplicateRollbackAndEmpty(t *testing.T) {
 		t.Fatalf("expected bulk insert to fail on duplicate url")
 	}
 
-	articles, err := db.ListArticles(false, nil)
+	articles, err := db.ListArticles(false, nil, nil)
 	if err != nil {
 		t.Fatalf("list articles: %v", err)
 	}
