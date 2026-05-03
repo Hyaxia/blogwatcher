@@ -53,6 +53,10 @@ func OpenDatabase(path string) (*Database, error) {
 		_ = conn.Close()
 		return nil, err
 	}
+	if err := db.migrate(); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
 	return db, nil
 }
 
@@ -89,12 +93,57 @@ func (db *Database) init() error {
 			FOREIGN KEY (blog_id) REFERENCES blogs(id)
 		);
 	`
-	if _, err := db.conn.Exec(schema); err != nil {
-		return err
+	_, err := db.conn.Exec(schema)
+	return err
+}
+
+// migrate adds new columns for existing databases.
+// Only list columns added AFTER the initial release here.
+// Columns already defined in the CREATE TABLE statement inside init()
+// do not need to be listed — they are created automatically on first run.
+//
+// To add a new column migration, append an entry to the map, e.g.:
+//
+//	"articles": {
+//		{"categories", "TEXT"},
+//	},
+func (db *Database) migrate() error {
+	type col struct{ name, colType string }
+	migrations := map[string][]col{
+		"blogs": {
+			{"user_agent", "TEXT"},
+		},
 	}
-	if _, err := db.conn.Exec(`ALTER TABLE blogs ADD COLUMN user_agent TEXT`); err != nil {
-		if !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+	for table, cols := range migrations {
+		// Fetch all existing columns for this table.
+		existing := map[string]bool{}
+		rows, err := db.conn.Query(fmt.Sprintf("PRAGMA table_info('%s')", table))
+		if err != nil {
 			return err
+		}
+		for rows.Next() {
+			var cid int
+			var name, colType string
+			var notnull int
+			var dflt interface{}
+			var pk int
+			if err := rows.Scan(&cid, &name, &colType, &notnull, &dflt, &pk); err != nil {
+				rows.Close()
+				return err
+			}
+			existing[name] = true
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		// Add only the columns that are missing.
+		for _, c := range cols {
+			if !existing[c.name] {
+				if _, err := db.conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, c.name, c.colType)); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
