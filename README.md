@@ -123,7 +123,17 @@ When RSS isn't available, provide a CSS selector that matches article links:
 
 ## Database
 
-BlogWatcher stores data in SQLite at `~/.blogwatcher/blogwatcher.db`:
+By default, BlogWatcher stores data in SQLite at `~/.blogwatcher/blogwatcher.db`.
+
+To isolate independent blog lists (for example, to avoid accidental `read-all` across unrelated sets), set `BLOGWATCHER_DB`:
+
+```bash
+BLOGWATCHER_DB="$HOME/.blogwatcher/work.db" blogwatcher scan
+```
+
+With `BLOGWATCHER_DB` unset or empty, BlogWatcher falls back to the default path.
+
+Database tables:
 
 -   **blogs** - Tracked blogs (name, URL, feed URL, scrape selector)
 -   **articles** - Discovered articles (title, URL, dates, read status)
