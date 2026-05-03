@@ -3,6 +3,7 @@ package rss
 import (
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -71,6 +72,16 @@ func DiscoverFeedURL(blogURL string, timeout time.Duration) (string, error) {
 		return "", nil
 	}
 
+	contentType := response.Header.Get("Content-Type")
+	// If the URL already returns a feed content-type, validate and return it directly
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err == nil {
+		// Only accept explicit feed types, not generic XML (to avoid sitemap false positives)
+		if mediaType == "application/rss+xml" || mediaType == "application/atom+xml" || mediaType == "application/feed+json" {
+			return blogURL, nil
+		}
+	}
+
 	base, err := url.Parse(blogURL)
 	if err != nil {
 		return "", nil
@@ -90,7 +101,13 @@ func DiscoverFeedURL(blogURL string, timeout time.Duration) (string, error) {
 	}
 
 	for _, feedType := range feedTypes {
-		selection := doc.Find(fmt.Sprintf("link[rel='alternate'][type='%s']", feedType)).First()
+		// Use token matching for rel (rel~='value' matches rel as space-separated token)
+		// Use case-insensitive type matching [type~='value']
+		selection := doc.Find(fmt.Sprintf("link[rel~='alternate'][type~='%s']", feedType)).First()
+		if selection.Length() == 0 {
+			// Also check rel="self" for feeds that use self-referencing links (e.g. TechCrunch tag feeds)
+			selection = doc.Find(fmt.Sprintf("link[rel~='self'][type~='%s']", feedType)).First()
+		}
 		if selection.Length() == 0 {
 			continue
 		}
