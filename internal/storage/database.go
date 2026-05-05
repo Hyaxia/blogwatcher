@@ -58,6 +58,10 @@ func OpenDatabase(path string) (*Database, error) {
 		_ = conn.Close()
 		return nil, err
 	}
+	if err := db.migrate(); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
 	return db, nil
 }
 
@@ -80,6 +84,7 @@ func (db *Database) init() error {
 			url TEXT NOT NULL UNIQUE,
 			feed_url TEXT,
 			scrape_selector TEXT,
+			user_agent TEXT,
 			last_scanned TIMESTAMP
 		);
 		CREATE TABLE IF NOT EXISTS articles (
@@ -97,14 +102,67 @@ func (db *Database) init() error {
 	return err
 }
 
+// migrate adds new columns for existing databases.
+// Only list columns added AFTER the initial release here.
+// Columns already defined in the CREATE TABLE statement inside init()
+// do not need to be listed — they are created automatically on first run.
+//
+// To add a new column migration, append an entry to the map, e.g.:
+//
+//	"articles": {
+//		{"categories", "TEXT"},
+//	},
+func (db *Database) migrate() error {
+	type col struct{ name, colType string }
+	migrations := map[string][]col{
+		"blogs": {
+			{"user_agent", "TEXT"},
+		},
+	}
+	for table, cols := range migrations {
+		// Fetch all existing columns for this table.
+		existing := map[string]bool{}
+		rows, err := db.conn.Query(fmt.Sprintf("PRAGMA table_info('%s')", table))
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var cid int
+			var name, colType string
+			var notnull int
+			var dflt interface{}
+			var pk int
+			if err := rows.Scan(&cid, &name, &colType, &notnull, &dflt, &pk); err != nil {
+				rows.Close()
+				return err
+			}
+			existing[name] = true
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		// Add only the columns that are missing.
+		for _, c := range cols {
+			if !existing[c.name] {
+				if _, err := db.conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, c.name, c.colType)); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (db *Database) AddBlog(blog model.Blog) (model.Blog, error) {
 	result, err := db.conn.Exec(
-		`INSERT INTO blogs (name, url, feed_url, scrape_selector, last_scanned)
-		VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO blogs (name, url, feed_url, scrape_selector, user_agent, last_scanned)
+		VALUES (?, ?, ?, ?, ?, ?)`,
 		blog.Name,
 		blog.URL,
 		nullIfEmpty(blog.FeedURL),
 		nullIfEmpty(blog.ScrapeSelector),
+		nullIfEmpty(blog.UserAgent),
 		formatTimePtr(blog.LastScanned),
 	)
 	if err != nil {
@@ -119,22 +177,22 @@ func (db *Database) AddBlog(blog model.Blog) (model.Blog, error) {
 }
 
 func (db *Database) GetBlog(id int64) (*model.Blog, error) {
-	row := db.conn.QueryRow(`SELECT id, name, url, feed_url, scrape_selector, last_scanned FROM blogs WHERE id = ?`, id)
+	row := db.conn.QueryRow(`SELECT id, name, url, feed_url, scrape_selector, user_agent, last_scanned FROM blogs WHERE id = ?`, id)
 	return scanBlog(row)
 }
 
 func (db *Database) GetBlogByName(name string) (*model.Blog, error) {
-	row := db.conn.QueryRow(`SELECT id, name, url, feed_url, scrape_selector, last_scanned FROM blogs WHERE name = ?`, name)
+	row := db.conn.QueryRow(`SELECT id, name, url, feed_url, scrape_selector, user_agent, last_scanned FROM blogs WHERE name = ?`, name)
 	return scanBlog(row)
 }
 
 func (db *Database) GetBlogByURL(url string) (*model.Blog, error) {
-	row := db.conn.QueryRow(`SELECT id, name, url, feed_url, scrape_selector, last_scanned FROM blogs WHERE url = ?`, url)
+	row := db.conn.QueryRow(`SELECT id, name, url, feed_url, scrape_selector, user_agent, last_scanned FROM blogs WHERE url = ?`, url)
 	return scanBlog(row)
 }
 
 func (db *Database) ListBlogs() ([]model.Blog, error) {
-	rows, err := db.conn.Query(`SELECT id, name, url, feed_url, scrape_selector, last_scanned FROM blogs ORDER BY name`)
+	rows, err := db.conn.Query(`SELECT id, name, url, feed_url, scrape_selector, user_agent, last_scanned FROM blogs ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -155,11 +213,12 @@ func (db *Database) ListBlogs() ([]model.Blog, error) {
 
 func (db *Database) UpdateBlog(blog model.Blog) error {
 	_, err := db.conn.Exec(
-		`UPDATE blogs SET name = ?, url = ?, feed_url = ?, scrape_selector = ?, last_scanned = ? WHERE id = ?`,
+		`UPDATE blogs SET name = ?, url = ?, feed_url = ?, scrape_selector = ?, user_agent = ?, last_scanned = ? WHERE id = ?`,
 		blog.Name,
 		blog.URL,
 		nullIfEmpty(blog.FeedURL),
 		nullIfEmpty(blog.ScrapeSelector),
+		nullIfEmpty(blog.UserAgent),
 		formatTimePtr(blog.LastScanned),
 		blog.ID,
 	)
@@ -365,9 +424,10 @@ func scanBlog(scanner interface{ Scan(dest ...any) error }) (*model.Blog, error)
 		url            string
 		feedURL        sql.NullString
 		scrapeSelector sql.NullString
+		userAgent      sql.NullString
 		lastScanned    sql.NullString
 	)
-	if err := scanner.Scan(&id, &name, &url, &feedURL, &scrapeSelector, &lastScanned); err != nil {
+	if err := scanner.Scan(&id, &name, &url, &feedURL, &scrapeSelector, &userAgent, &lastScanned); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
@@ -380,6 +440,7 @@ func scanBlog(scanner interface{ Scan(dest ...any) error }) (*model.Blog, error)
 		URL:            url,
 		FeedURL:        feedURL.String,
 		ScrapeSelector: scrapeSelector.String,
+		UserAgent:      userAgent.String,
 	}
 	if lastScanned.Valid {
 		if parsed, err := parseTime(lastScanned.String); err == nil {

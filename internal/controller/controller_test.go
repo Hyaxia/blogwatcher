@@ -12,16 +12,16 @@ func TestAddBlogAndRemoveBlog(t *testing.T) {
 	db := openTestDB(t)
 	defer db.Close()
 
-	blog, err := AddBlog(db, "Test", "https://example.com", "", "")
+	blog, err := AddBlog(db, "Test", "https://example.com", "", "", "")
 	if err != nil {
 		t.Fatalf("add blog: %v", err)
 	}
 
-	if _, err := AddBlog(db, "Test", "https://other.com", "", ""); err == nil {
+	if _, err := AddBlog(db, "Test", "https://other.com", "", "", ""); err == nil {
 		t.Fatalf("expected duplicate name error")
 	}
 
-	if _, err := AddBlog(db, "Other", "https://example.com", "", ""); err == nil {
+	if _, err := AddBlog(db, "Other", "https://example.com", "", "", ""); err == nil {
 		t.Fatalf("expected duplicate url error")
 	}
 
@@ -34,7 +34,7 @@ func TestArticleReadUnread(t *testing.T) {
 	db := openTestDB(t)
 	defer db.Close()
 
-	blog, err := AddBlog(db, "Test", "https://example.com", "", "")
+	blog, err := AddBlog(db, "Test", "https://example.com", "", "", "")
 	if err != nil {
 		t.Fatalf("add blog: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestGetArticlesFilters(t *testing.T) {
 	db := openTestDB(t)
 	defer db.Close()
 
-	blog, err := AddBlog(db, "Test", "https://example.com", "", "")
+	blog, err := AddBlog(db, "Test", "https://example.com", "", "", "")
 	if err != nil {
 		t.Fatalf("add blog: %v", err)
 	}

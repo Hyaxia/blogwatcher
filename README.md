@@ -39,6 +39,9 @@ blogwatcher add "Tech Blog" https://techblog.com --feed-url https://techblog.com
 
 # Add with HTML scraping selector (for blogs without feeds)
 blogwatcher add "No-RSS Blog" https://norss.com --scrape-selector "article h2 a"
+
+# Add with per-blog User-Agent override
+blogwatcher add "Blocked Blog" https://blocked.example --feed-url https://blocked.example/feed --user-agent "Mozilla/5.0 ..."
 ```
 
 ### Managing Blogs
@@ -62,6 +65,9 @@ blogwatcher scan
 
 # Scan a specific blog
 blogwatcher scan "Tech Blog"
+
+# Per-blog User-Agent is configured at add time via --user-agent
+# Example above: blogwatcher add ... --user-agent "Mozilla/5.0 ..."
 ```
 
 ### Viewing Articles
