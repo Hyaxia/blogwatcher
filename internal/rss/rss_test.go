@@ -75,7 +75,7 @@ func TestDiscoverFeedURL_XMLContentType(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	feedURL, err := DiscoverFeedURL(server.URL+"/tag/AI/feed/", 2*time.Second)
+	feedURL, err := DiscoverFeedURL(server.URL+"/tag/AI/feed/", 2*time.Second, "")
 	if err != nil {
 		t.Fatalf("discover feed: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestDiscoverFeedURL_RelSelf(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	feedURL, err := DiscoverFeedURL(server.URL, 2*time.Second)
+	feedURL, err := DiscoverFeedURL(server.URL, 2*time.Second, "")
 	if err != nil {
 		t.Fatalf("discover feed: %v", err)
 	}
