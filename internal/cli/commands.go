@@ -392,6 +392,17 @@ func printArticle(article model.Article, blogName string) {
 	if article.PublishedDate != nil {
 		fmt.Printf("       Published: %s\n", article.PublishedDate.Format("2006-01-02"))
 	}
+	if article.Keywords != "" {
+		fmt.Printf("       Keywords: %s\n", article.Keywords)
+	}
+	if article.Description != "" {
+		// Truncate description if too long
+		desc := article.Description
+		if len(desc) > 100 {
+			desc = desc[:100] + "..."
+		}
+		fmt.Printf("       Description: %s\n", desc)
+	}
 	fmt.Println()
 }
 
