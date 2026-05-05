@@ -1,8 +1,10 @@
 package rss
 
 import (
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -17,6 +19,8 @@ type FeedArticle struct {
 	Title         string
 	URL           string
 	PublishedDate *time.Time
+	Keywords      string
+	Description   string
 }
 
 type FeedParseError struct {
@@ -38,27 +42,122 @@ func ParseFeed(feedURL string, timeout time.Duration, userAgent string) ([]FeedA
 		return nil, FeedParseError{Message: fmt.Sprintf("failed to fetch feed: status %d", response.StatusCode)}
 	}
 
-	parser := gofeed.NewParser()
-	feed, err := parser.Parse(response.Body)
+	// Use custom XML parser to capture all <keyword> tags
+	articles, err := parseFeedXML(response.Body)
 	if err != nil {
 		return nil, FeedParseError{Message: fmt.Sprintf("failed to parse feed: %v", err)}
 	}
 
+	return articles, nil
+}
+
+// parseFeedXML uses xml.Decoder to capture all custom elements including multiple <keyword> tags
+func parseFeedXML(reader io.Reader) ([]FeedArticle, error) {
+	decoder := xml.NewDecoder(reader)
 	var articles []FeedArticle
-	for _, item := range feed.Items {
-		title := strings.TrimSpace(item.Title)
-		link := strings.TrimSpace(item.Link)
-		if title == "" || link == "" {
-			continue
+	var currentItem *xml.StartElement
+	var currentTitle, currentLink, currentDescription string
+	var currentPubDate string
+	var currentKeywords []string
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
 		}
-		articles = append(articles, FeedArticle{
-			Title:         title,
-			URL:           link,
-			PublishedDate: pickPublishedDate(item),
-		})
+
+		switch elem := token.(type) {
+		case xml.StartElement:
+			if elem.Name.Local == "item" {
+				// Start of new item, reset
+				currentItem = &elem
+				currentTitle = ""
+				currentLink = ""
+				currentDescription = ""
+				currentPubDate = ""
+				currentKeywords = nil
+			} else if currentItem != nil {
+				// Inside item, look for specific elements
+				switch elem.Name.Local {
+				case "title":
+					if text := readTextContent(decoder, elem); text != "" {
+						currentTitle = text
+					}
+				case "link":
+					if text := readTextContent(decoder, elem); text != "" {
+						currentLink = text
+					}
+				case "description":
+					if text := readTextContent(decoder, elem); text != "" {
+						currentDescription = text
+					}
+				case "pubDate":
+					if text := readTextContent(decoder, elem); text != "" {
+						currentPubDate = text
+					}
+				case "keyword":
+					if text := readTextContent(decoder, elem); text != "" {
+						currentKeywords = append(currentKeywords, text)
+					}
+				}
+			}
+		case xml.EndElement:
+			if elem.Name.Local == "item" && currentTitle != "" && currentLink != "" {
+				pubDate := parseRSSDate(currentPubDate)
+				desc := stripHTML(currentDescription)
+				articles = append(articles, FeedArticle{
+					Title:         strings.TrimSpace(currentTitle),
+					URL:           strings.TrimSpace(currentLink),
+					PublishedDate: pubDate,
+					Keywords:      strings.Join(currentKeywords, ","),
+					Description:   strings.TrimSpace(desc),
+				})
+				currentItem = nil
+			}
+		}
 	}
 
 	return articles, nil
+}
+
+func readTextContent(decoder *xml.Decoder, elem xml.StartElement) string {
+	var text string
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			break
+		}
+		if char, ok := token.(xml.CharData); ok {
+			text += string(char)
+		}
+		if _, ok := token.(xml.EndElement); ok {
+			break
+		}
+	}
+	return text
+}
+
+func parseRSSDate(dateStr string) *time.Time {
+	if dateStr == "" {
+		return nil
+	}
+	// Try multiple date formats
+	formats := []string{
+		time.RFC1123Z,    // "Mon, 02 Jan 2006 15:04:05 -0700"
+		time.RFC1123,     // "Mon, 02 Jan 2006 15:04:05 GMT"
+		"Mon, 02 Jan 2006 15:04:05 -0700",
+		"Mon, 02 Jan 2006 15:04:05 GMT",
+		time.RFC3339,
+	}
+	for _, format := range formats {
+		if t, err := time.Parse(format, dateStr); err == nil {
+			return &t
+		}
+	}
+	return nil
 }
 
 func DiscoverFeedURL(blogURL string, timeout time.Duration, userAgent string) (string, error) {
@@ -189,17 +288,32 @@ func resolveURL(base *url.URL, href string) string {
 	return base.ResolveReference(parsed).String()
 }
 
-func pickPublishedDate(item *gofeed.Item) *time.Time {
-	if item == nil {
-		return nil
+func stripHTML(html string) string {
+	re := strings.NewReplacer(
+		"<br>", " ",
+		"<br/>", " ",
+		"<br />", " ",
+		"<p>", " ",
+		"</p>", " ",
+		"<div>", " ",
+		"</div>", " ",
+		"&nbsp;", " ",
+		"&amp;", "&",
+		"&lt;", "<",
+		"&gt;", ">",
+		"&quot;", `"`,
+	)
+	html = re.Replace(html)
+	for strings.Contains(html, "<") && strings.Contains(html, ">") {
+		start := strings.Index(html, "<")
+		end := strings.Index(html, ">")
+		if end > start {
+			html = html[:start] + html[end+1:]
+		} else {
+			break
+		}
 	}
-	if item.PublishedParsed != nil {
-		return item.PublishedParsed
-	}
-	if item.UpdatedParsed != nil {
-		return item.UpdatedParsed
-	}
-	return nil
+	return strings.TrimSpace(html)
 }
 
 func IsFeedError(err error) bool {
