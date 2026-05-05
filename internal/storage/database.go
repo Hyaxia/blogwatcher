@@ -118,6 +118,10 @@ func (db *Database) migrate() error {
 		"blogs": {
 			{"user_agent", "TEXT"},
 		},
+		"articles": {
+			{"keywords", "TEXT"},
+			{"description", "TEXT"},
+		},
 	}
 	for table, cols := range migrations {
 		// Fetch all existing columns for this table.
@@ -248,14 +252,16 @@ func (db *Database) RemoveBlog(id int64) (bool, error) {
 
 func (db *Database) AddArticle(article model.Article) (model.Article, error) {
 	result, err := db.conn.Exec(
-		`INSERT INTO articles (blog_id, title, url, published_date, discovered_date, is_read)
-		VALUES (?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO articles (blog_id, title, url, published_date, discovered_date, is_read, keywords, description)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		article.BlogID,
 		article.Title,
 		article.URL,
 		formatTimePtr(article.PublishedDate),
 		formatTimePtr(article.DiscoveredDate),
 		article.IsRead,
+		nullIfEmpty(article.Keywords),
+		nullIfEmpty(article.Description),
 	)
 	if err != nil {
 		return article, err
@@ -276,7 +282,7 @@ func (db *Database) AddArticlesBulk(articles []model.Article) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	stmt, err := _tx.Prepare(`INSERT INTO articles (blog_id, title, url, published_date, discovered_date, is_read) VALUES (?, ?, ?, ?, ?, ?)`)
+	stmt, err := _tx.Prepare(`INSERT INTO articles (blog_id, title, url, published_date, discovered_date, is_read, keywords, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		_ = _tx.Rollback()
 		return 0, err
@@ -291,6 +297,8 @@ func (db *Database) AddArticlesBulk(articles []model.Article) (int, error) {
 			formatTimePtr(article.PublishedDate),
 			formatTimePtr(article.DiscoveredDate),
 			article.IsRead,
+			nullIfEmpty(article.Keywords),
+			nullIfEmpty(article.Description),
 		)
 		if err != nil {
 			_ = _tx.Rollback()
@@ -304,12 +312,12 @@ func (db *Database) AddArticlesBulk(articles []model.Article) (int, error) {
 }
 
 func (db *Database) GetArticle(id int64) (*model.Article, error) {
-	row := db.conn.QueryRow(`SELECT id, blog_id, title, url, published_date, discovered_date, is_read FROM articles WHERE id = ?`, id)
+	row := db.conn.QueryRow(`SELECT id, blog_id, title, url, published_date, discovered_date, is_read, keywords, description FROM articles WHERE id = ?`, id)
 	return scanArticle(row)
 }
 
 func (db *Database) GetArticleByURL(url string) (*model.Article, error) {
-	row := db.conn.QueryRow(`SELECT id, blog_id, title, url, published_date, discovered_date, is_read FROM articles WHERE url = ?`, url)
+	row := db.conn.QueryRow(`SELECT id, blog_id, title, url, published_date, discovered_date, is_read, keywords, description FROM articles WHERE url = ?`, url)
 	return scanArticle(row)
 }
 
@@ -363,7 +371,7 @@ func (db *Database) GetExistingArticleURLs(urls []string) (map[string]struct{}, 
 }
 
 func (db *Database) ListArticles(unreadOnly bool, blogID *int64) ([]model.Article, error) {
-	query := `SELECT id, blog_id, title, url, published_date, discovered_date, is_read FROM articles WHERE 1=1`
+	query := `SELECT id, blog_id, title, url, published_date, discovered_date, is_read, keywords, description FROM articles WHERE 1=1`
 	var args []interface{}
 	if unreadOnly {
 		query += " AND is_read = 0"
@@ -459,8 +467,10 @@ func scanArticle(scanner interface{ Scan(dest ...any) error }) (*model.Article, 
 		publishedDate sql.NullString
 		discovered    sql.NullString
 		isRead        bool
+		keywords      sql.NullString
+		description   sql.NullString
 	)
-	if err := scanner.Scan(&id, &blogID, &title, &url, &publishedDate, &discovered, &isRead); err != nil {
+	if err := scanner.Scan(&id, &blogID, &title, &url, &publishedDate, &discovered, &isRead, &keywords, &description); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
@@ -468,11 +478,13 @@ func scanArticle(scanner interface{ Scan(dest ...any) error }) (*model.Article, 
 	}
 
 	article := &model.Article{
-		ID:     id,
-		BlogID: blogID,
-		Title:  title,
-		URL:    url,
-		IsRead: isRead,
+		ID:          id,
+		BlogID:      blogID,
+		Title:       title,
+		URL:         url,
+		IsRead:      isRead,
+		Keywords:    keywords.String,
+		Description: description.String,
 	}
 	if publishedDate.Valid {
 		if parsed, err := parseTime(publishedDate.String); err == nil {
