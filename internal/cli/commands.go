@@ -20,6 +20,7 @@ import (
 func newAddCommand() *cobra.Command {
 	var feedURL string
 	var scrapeSelector string
+	var userAgent string
 
 	cmd := &cobra.Command{
 		Use:   "add <name> <url>",
@@ -33,7 +34,7 @@ func newAddCommand() *cobra.Command {
 				return err
 			}
 			defer db.Close()
-			_, err = controller.AddBlog(db, name, url, feedURL, scrapeSelector)
+			_, err = controller.AddBlog(db, name, url, feedURL, scrapeSelector, userAgent)
 			if err != nil {
 				printError(err)
 				return markError(err)
@@ -44,6 +45,7 @@ func newAddCommand() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&feedURL, "feed-url", "", "RSS/Atom feed URL (auto-discovered if not provided)")
 	cmd.Flags().StringVar(&scrapeSelector, "scrape-selector", "", "CSS selector for HTML scraping fallback")
+	cmd.Flags().StringVar(&userAgent, "user-agent", "", "Per-blog HTTP User-Agent override")
 	return cmd
 }
 
@@ -108,6 +110,9 @@ func newBlogsCommand() *cobra.Command {
 				}
 				if blog.ScrapeSelector != "" {
 					fmt.Printf("    Selector: %s\n", blog.ScrapeSelector)
+				}
+				if blog.UserAgent != "" {
+					fmt.Printf("    User-Agent: %s\n", blog.UserAgent)
 				}
 				if blog.LastScanned != nil {
 					fmt.Printf("    Last scanned: %s\n", blog.LastScanned.Format("2006-01-02 15:04"))

@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -408,5 +410,76 @@ func TestLookupHelpers(t *testing.T) {
 	}
 	if exists, err := db.ArticleExists("https://example.com/missing"); err != nil || exists {
 		t.Fatalf("expected missing article to not exist")
+	}
+}
+
+func TestMigrateAddsMissingColumns(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "old.db")
+
+	// Create an old-style database without user_agent column.
+	conn, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw connection: %v", err)
+	}
+	_, err = conn.Exec(`
+		CREATE TABLE blogs (
+			id INTEGER PRIMARY KEY,
+			name TEXT NOT NULL,
+			url TEXT NOT NULL UNIQUE,
+			feed_url TEXT,
+			scrape_selector TEXT,
+			last_scanned TIMESTAMP
+		);
+		CREATE TABLE articles (
+			id INTEGER PRIMARY KEY,
+			blog_id INTEGER NOT NULL,
+			title TEXT NOT NULL,
+			url TEXT NOT NULL UNIQUE,
+			published_date TIMESTAMP,
+			discovered_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			is_read BOOLEAN DEFAULT FALSE,
+			FOREIGN KEY (blog_id) REFERENCES blogs(id)
+		);
+	`)
+	if err != nil {
+		t.Fatalf("create old schema: %v", err)
+	}
+	conn.Close()
+
+	// Open with the new code — should trigger migrate().
+	db, err := OpenDatabase(path)
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	defer db.Close()
+
+	// Verify user_agent column now exists and is usable.
+	conn, err = sql.Open("sqlite", fmt.Sprintf("file:%s", path))
+	if err != nil {
+		t.Fatalf("reopen raw connection: %v", err)
+	}
+	defer conn.Close()
+
+	var count int
+	err = conn.QueryRow("SELECT COUNT(*) FROM pragma_table_info('blogs') WHERE name = 'user_agent'").Scan(&count)
+	if err != nil {
+		t.Fatalf("query pragma_table_info: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected user_agent column to exist after migration, got count=%d", count)
+	}
+
+	// Verify the column works end-to-end by inserting and reading a blog.
+	blog, err := db.AddBlog(model.Blog{Name: "Test", URL: "https://example.com", UserAgent: "MyBot/1.0"})
+	if err != nil {
+		t.Fatalf("add blog: %v", err)
+	}
+	got, err := db.GetBlog(blog.ID)
+	if err != nil {
+		t.Fatalf("get blog: %v", err)
+	}
+	if got.UserAgent != "MyBot/1.0" {
+		t.Fatalf("expected user_agent 'MyBot/1.0', got %q", got.UserAgent)
 	}
 }
