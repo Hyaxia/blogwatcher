@@ -1,6 +1,7 @@
 package rss
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,6 +85,23 @@ func TestParseFeedMetadataOptionsAreIndependent(t *testing.T) {
 	}
 }
 
+func TestReadBufferedFeedLimit(t *testing.T) {
+	exact := bytes.NewReader(bytes.Repeat([]byte{'x'}, int(maxBufferedFeedBytes)))
+	body, err := readBufferedFeed(exact)
+	if err != nil {
+		t.Fatalf("read feed at limit: %v", err)
+	}
+	if int64(len(body)) != maxBufferedFeedBytes {
+		t.Fatalf("expected %d bytes, got %d", maxBufferedFeedBytes, len(body))
+	}
+
+	overLimit := bytes.NewReader(bytes.Repeat([]byte{'x'}, int(maxBufferedFeedBytes+1)))
+	_, err = readBufferedFeed(overLimit)
+	if err == nil || !strings.Contains(err.Error(), "exceeds 10 MiB limit") {
+		t.Fatalf("expected clear oversized-feed error, got %v", err)
+	}
+}
+
 func TestDescriptionSelectionAndNormalization(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -131,6 +149,33 @@ func TestDescriptionCharacterLimit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDescriptionCharacterLimitCJK(t *testing.T) {
+	t.Run("all Chinese text falls back to rune boundary", func(t *testing.T) {
+		value := strings.Repeat("汉", 1200)
+		got := limitAtWordBoundary(value, 1000)
+		want := strings.Repeat("汉", 999) + "…"
+		if got != want {
+			t.Fatalf("expected 999 Chinese runes plus ellipsis, got %d runes", len([]rune(got)))
+		}
+	})
+
+	t.Run("nearby Chinese punctuation is included", func(t *testing.T) {
+		got := limitAtWordBoundary("甲乙丙丁戊己，庚辛壬", 8)
+		if got != "甲乙丙丁戊己，…" {
+			t.Fatalf("expected punctuation boundary, got %q", got)
+		}
+	})
+
+	t.Run("distant whitespace does not discard CJK text", func(t *testing.T) {
+		value := "开头 " + strings.Repeat("中", 100)
+		got := limitAtWordBoundary(value, 50)
+		want := string([]rune(value)[:49]) + "…"
+		if got != want {
+			t.Fatalf("expected exact rune-boundary fallback, got %q", got)
+		}
+	})
 }
 
 func TestParseFeedKeywordAlignment(t *testing.T) {

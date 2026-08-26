@@ -33,6 +33,8 @@ type ParseOptions struct {
 	DescriptionMaxChars int
 }
 
+const maxBufferedFeedBytes int64 = 10 << 20
+
 type FeedParseError struct {
 	Message string
 }
@@ -66,7 +68,7 @@ func ParseFeedWithOptions(feedURL string, timeout time.Duration, userAgent strin
 	)
 	parser := gofeed.NewParser()
 	if options.StoreKeywords {
-		body, readErr := io.ReadAll(response.Body)
+		body, readErr := readBufferedFeed(response.Body)
 		if readErr != nil {
 			return nil, FeedParseError{Message: fmt.Sprintf("failed to read feed: %v", readErr)}
 		}
@@ -106,6 +108,17 @@ func ParseFeedWithOptions(feedURL string, timeout time.Duration, userAgent strin
 	}
 
 	return articles, nil
+}
+
+func readBufferedFeed(reader io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(reader, maxBufferedFeedBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxBufferedFeedBytes {
+		return nil, errors.New("feed exceeds 10 MiB limit for keyword extraction")
+	}
+	return body, nil
 }
 
 func parseKeywordSets(body []byte) ([][]string, error) {
@@ -222,12 +235,16 @@ func limitAtWordBoundary(value string, maxChars int) string {
 
 	cutoff := maxChars - 1
 	boundary := cutoff
-	if !unicode.IsSpace(runes[cutoff]) {
-		for index := cutoff - 1; index >= 0; index-- {
-			if unicode.IsSpace(runes[index]) {
-				boundary = index
-				break
-			}
+	foundBoundary := unicode.IsSpace(runes[cutoff])
+	lookbackStart := max(cutoff-32, 0)
+	for index := cutoff - 1; !foundBoundary && index >= lookbackStart; index-- {
+		switch {
+		case unicode.IsPunct(runes[index]):
+			boundary = index + 1
+			foundBoundary = true
+		case unicode.IsSpace(runes[index]):
+			boundary = index
+			foundBoundary = true
 		}
 	}
 	prefix := strings.TrimSpace(string(runes[:boundary]))
