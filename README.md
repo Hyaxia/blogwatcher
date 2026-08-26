@@ -70,7 +70,7 @@ blogwatcher scan "Tech Blog"
 # Per-blog User-Agent is configured at add time via --user-agent
 # Example above: blogwatcher add ... --user-agent "Mozilla/5.0 ..."
 
-# Opt in to storing article descriptions (limited to 1,000 characters by default)
+# Opt in to storing the first description/content paragraph (limited to 1,000 characters by default)
 blogwatcher scan --store-descriptions
 
 # Choose another character limit, or use 0 for no upper bound
@@ -87,6 +87,10 @@ BLOGWATCHER_STORE_KEYWORDS=true blogwatcher scan
 Description and keyword storage are disabled by default. These settings affect only newly discovered articles: existing rows are not backfilled, and disabling a setting does not remove values already stored. `BLOGWATCHER_STORE_DESCRIPTIONS` and `BLOGWATCHER_STORE_KEYWORDS` use Go boolean syntax; `true` and `false` are recommended, while standard forms such as `1`, `0`, `TRUE`, and `FALSE` are also accepted. Command-line flags override environment settings.
 
 `BLOGWATCHER_DESCRIPTION_MAX_CHARS` defaults to `1000` after description storage is enabled. A value of `0` removes the upper bound; negative values are invalid. Supplying a description limit without enabling description storage is treated as incomplete configuration.
+
+When description storage is enabled, BlogWatcher keeps the first meaningful paragraph from the feed description, falling back to the first meaningful content paragraph. It decodes HTML entities, removes scripts and styles, and normalizes whitespace. The character limit counts Unicode characters rather than bytes; truncation prefers nearby whitespace or punctuation and otherwise uses the exact character boundary. The final ellipsis is included in the configured maximum.
+
+Keyword extraction buffers at most 10 MiB of decompressed feed data. A larger feed is rejected with an error when keyword storage is enabled; scans without keyword storage continue to use the direct feed parser.
 
 ### Viewing Articles
 
