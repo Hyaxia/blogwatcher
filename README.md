@@ -9,6 +9,7 @@ A Go CLI tool to track blog articles, detect new posts, and manage read/unread s
 -   **Read/Unread Management** - Track which articles you've read
 -   **Blog Filtering** - View articles from specific blogs
 -   **Duplicate Prevention** - Never tracks the same article twice
+-   **Optional Feed Metadata** - Store and display descriptions or keywords only when explicitly enabled
 -   **Colored CLI Output** - User-friendly terminal interface
 
 ## Installation
@@ -68,7 +69,24 @@ blogwatcher scan "Tech Blog"
 
 # Per-blog User-Agent is configured at add time via --user-agent
 # Example above: blogwatcher add ... --user-agent "Mozilla/5.0 ..."
+
+# Opt in to storing article descriptions (limited to 1,000 characters by default)
+blogwatcher scan --store-descriptions
+
+# Choose another character limit, or use 0 for no upper bound
+blogwatcher scan --store-descriptions --description-max-chars 500
+
+# Store feed keywords independently
+blogwatcher scan --store-keywords
+
+# The equivalent environment settings are useful for scheduled scans
+BLOGWATCHER_STORE_DESCRIPTIONS=true BLOGWATCHER_DESCRIPTION_MAX_CHARS=500 blogwatcher scan
+BLOGWATCHER_STORE_KEYWORDS=true blogwatcher scan
 ```
+
+Description and keyword storage are disabled by default. These settings affect only newly discovered articles: existing rows are not backfilled, and disabling a setting does not remove values already stored. `BLOGWATCHER_STORE_DESCRIPTIONS` and `BLOGWATCHER_STORE_KEYWORDS` use Go boolean syntax; `true` and `false` are recommended, while standard forms such as `1`, `0`, `TRUE`, and `FALSE` are also accepted. Command-line flags override environment settings.
+
+`BLOGWATCHER_DESCRIPTION_MAX_CHARS` defaults to `1000` after description storage is enabled. A value of `0` removes the upper bound; negative values are invalid. Supplying a description limit without enabling description storage is treated as incomplete configuration.
 
 ### Viewing Articles
 
@@ -81,7 +99,14 @@ blogwatcher articles --all
 
 # List articles from a specific blog
 blogwatcher articles --blog "Tech Blog"
+
+# Opt in to displaying stored metadata (independently or together)
+blogwatcher articles --show-descriptions
+blogwatcher articles --show-keywords
+blogwatcher articles --show-descriptions --show-keywords
 ```
+
+Without either display flag, `blogwatcher articles` retains its original output format. Requested fields are omitted on rows where no value was stored.
 
 ### Managing Read Status
 
@@ -142,7 +167,9 @@ With `BLOGWATCHER_DB` unset or empty, BlogWatcher falls back to the default path
 Database tables:
 
 -   **blogs** - Tracked blogs (name, URL, feed URL, scrape selector)
--   **articles** - Discovered articles (title, URL, dates, read status)
+-   **articles** - Discovered articles (title, URL, dates, read status, and nullable description and keyword fields)
+
+The nullable metadata columns are always added through an additive migration, but remain `NULL` for new articles unless their corresponding scan option is enabled. Older BlogWatcher binaries safely ignore these columns.
 
 ## Development
 
