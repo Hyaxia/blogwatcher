@@ -19,7 +19,17 @@ type ScanResult struct {
 	Error       string
 }
 
+type Options struct {
+	StoreDescriptions   bool
+	StoreKeywords       bool
+	DescriptionMaxChars int
+}
+
 func ScanBlog(db *storage.Database, blog model.Blog) ScanResult {
+	return ScanBlogWithOptions(db, blog, Options{})
+}
+
+func ScanBlogWithOptions(db *storage.Database, blog model.Blog, options Options) ScanResult {
 	var (
 		articles []model.Article
 		source   = "none"
@@ -38,7 +48,11 @@ func ScanBlog(db *storage.Database, blog model.Blog) ScanResult {
 	}
 
 	if feedURL != "" {
-		feedArticles, err := rss.ParseFeed(feedURL, 30*time.Second, effectiveUserAgent)
+		feedArticles, err := rss.ParseFeedWithOptions(feedURL, 30*time.Second, effectiveUserAgent, rss.ParseOptions{
+			StoreDescriptions:   options.StoreDescriptions,
+			StoreKeywords:       options.StoreKeywords,
+			DescriptionMaxChars: options.DescriptionMaxChars,
+		})
 		if err != nil {
 			errText = err.Error()
 		} else {
@@ -114,6 +128,10 @@ func ScanBlog(db *storage.Database, blog model.Blog) ScanResult {
 }
 
 func ScanAllBlogs(db *storage.Database, workers int) ([]ScanResult, error) {
+	return ScanAllBlogsWithOptions(db, workers, Options{})
+}
+
+func ScanAllBlogsWithOptions(db *storage.Database, workers int, options Options) ([]ScanResult, error) {
 	blogs, err := db.ListBlogs()
 	if err != nil {
 		return nil, err
@@ -121,7 +139,7 @@ func ScanAllBlogs(db *storage.Database, workers int) ([]ScanResult, error) {
 	if workers <= 1 {
 		results := make([]ScanResult, 0, len(blogs))
 		for _, blog := range blogs {
-			results = append(results, ScanBlog(db, blog))
+			results = append(results, ScanBlogWithOptions(db, blog, options))
 		}
 		return results, nil
 	}
@@ -143,7 +161,7 @@ func ScanAllBlogs(db *storage.Database, workers int) ([]ScanResult, error) {
 			}
 			defer workerDB.Close()
 			for item := range jobs {
-				results[item.Index] = ScanBlog(workerDB, item.Blog)
+				results[item.Index] = ScanBlogWithOptions(workerDB, item.Blog, options)
 			}
 			errs <- nil
 		}()
@@ -164,6 +182,10 @@ func ScanAllBlogs(db *storage.Database, workers int) ([]ScanResult, error) {
 }
 
 func ScanBlogByName(db *storage.Database, name string) (*ScanResult, error) {
+	return ScanBlogByNameWithOptions(db, name, Options{})
+}
+
+func ScanBlogByNameWithOptions(db *storage.Database, name string, options Options) (*ScanResult, error) {
 	blog, err := db.GetBlogByName(name)
 	if err != nil {
 		return nil, err
@@ -171,7 +193,7 @@ func ScanBlogByName(db *storage.Database, name string) (*ScanResult, error) {
 	if blog == nil {
 		return nil, nil
 	}
-	result := ScanBlog(db, *blog)
+	result := ScanBlogWithOptions(db, *blog, options)
 	return &result, nil
 }
 
@@ -184,8 +206,8 @@ func convertFeedArticles(blogID int64, articles []rss.FeedArticle) []model.Artic
 			URL:           article.URL,
 			PublishedDate: article.PublishedDate,
 			IsRead:        false,
-			Keywords:     article.Keywords,
-			Description:  article.Description,
+			Keywords:      article.Keywords,
+			Description:   article.Description,
 		})
 	}
 	return result

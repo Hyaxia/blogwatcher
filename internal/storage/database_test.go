@@ -270,6 +270,66 @@ func TestArticleTimeRoundTripAndNilDiscoveredDate(t *testing.T) {
 	}
 }
 
+func TestArticleMetadataRoundTripAndNullDefaults(t *testing.T) {
+	db, err := OpenDatabase(filepath.Join(t.TempDir(), "blogwatcher.db"))
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	defer db.Close()
+
+	blog, err := db.AddBlog(model.Blog{Name: "Test", URL: "https://example.com"})
+	if err != nil {
+		t.Fatalf("add blog: %v", err)
+	}
+	plain, err := db.AddArticle(model.Article{BlogID: blog.ID, Title: "Plain", URL: "https://example.com/plain"})
+	if err != nil {
+		t.Fatalf("add plain article: %v", err)
+	}
+	var descriptionIsNull, keywordsIsNull bool
+	if err := db.conn.QueryRow(`SELECT description IS NULL, keywords IS NULL FROM articles WHERE id = ?`, plain.ID).Scan(&descriptionIsNull, &keywordsIsNull); err != nil {
+		t.Fatalf("query null metadata: %v", err)
+	}
+	if !descriptionIsNull || !keywordsIsNull {
+		t.Fatalf("expected disabled metadata to be NULL, got description=%v keywords=%v", descriptionIsNull, keywordsIsNull)
+	}
+
+	metadata, err := db.AddArticle(model.Article{
+		BlogID: blog.ID, Title: "Metadata", URL: "https://example.com/metadata",
+		Description: "Complete description.", Keywords: "go,rss",
+	})
+	if err != nil {
+		t.Fatalf("add metadata article: %v", err)
+	}
+	fetched, err := db.GetArticle(metadata.ID)
+	if err != nil {
+		t.Fatalf("get metadata article: %v", err)
+	}
+	if fetched.Description != "Complete description." || fetched.Keywords != "go,rss" {
+		t.Fatalf("metadata did not round-trip: %+v", fetched)
+	}
+
+	_, err = db.AddArticlesBulk([]model.Article{{
+		BlogID: blog.ID, Title: "Bulk", URL: "https://example.com/bulk",
+		Description: "Bulk description.", Keywords: "bulk,test",
+	}})
+	if err != nil {
+		t.Fatalf("bulk insert metadata: %v", err)
+	}
+	listed, err := db.ListArticles(false, nil)
+	if err != nil {
+		t.Fatalf("list articles: %v", err)
+	}
+	foundBulk := false
+	for _, article := range listed {
+		if article.URL == "https://example.com/bulk" {
+			foundBulk = article.Description == "Bulk description." && article.Keywords == "bulk,test"
+		}
+	}
+	if !foundBulk {
+		t.Fatalf("bulk metadata did not round-trip: %+v", listed)
+	}
+}
+
 func TestListArticlesFiltersAndOrdering(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "blogwatcher.db")
@@ -454,7 +514,7 @@ func TestMigrateAddsMissingColumns(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Verify user_agent column now exists and is usable.
+	// Verify additive columns now exist and are usable.
 	conn, err = sql.Open("sqlite", fmt.Sprintf("file:%s", path))
 	if err != nil {
 		t.Fatalf("reopen raw connection: %v", err)
@@ -469,6 +529,15 @@ func TestMigrateAddsMissingColumns(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("expected user_agent column to exist after migration, got count=%d", count)
 	}
+	for _, column := range []string{"description", "keywords"} {
+		err = conn.QueryRow("SELECT COUNT(*) FROM pragma_table_info('articles') WHERE name = ?", column).Scan(&count)
+		if err != nil {
+			t.Fatalf("query articles schema: %v", err)
+		}
+		if count != 1 {
+			t.Fatalf("expected articles.%s after migration, got count=%d", column, count)
+		}
+	}
 
 	// Verify the column works end-to-end by inserting and reading a blog.
 	blog, err := db.AddBlog(model.Blog{Name: "Test", URL: "https://example.com", UserAgent: "MyBot/1.0"})
@@ -481,5 +550,19 @@ func TestMigrateAddsMissingColumns(t *testing.T) {
 	}
 	if got.UserAgent != "MyBot/1.0" {
 		t.Fatalf("expected user_agent 'MyBot/1.0', got %q", got.UserAgent)
+	}
+	article, err := db.AddArticle(model.Article{
+		BlogID: blog.ID, Title: "Migrated", URL: "https://example.com/migrated",
+		Description: "Migrated description.", Keywords: "migration,test",
+	})
+	if err != nil {
+		t.Fatalf("add article using migrated columns: %v", err)
+	}
+	gotArticle, err := db.GetArticle(article.ID)
+	if err != nil {
+		t.Fatalf("get article using migrated columns: %v", err)
+	}
+	if gotArticle.Description != "Migrated description." || gotArticle.Keywords != "migration,test" {
+		t.Fatalf("unexpected migrated metadata: %+v", gotArticle)
 	}
 }

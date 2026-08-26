@@ -3,6 +3,7 @@ package rss
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -39,6 +40,145 @@ func TestParseFeed(t *testing.T) {
 	}
 	if articles[0].PublishedDate == nil {
 		t.Fatalf("expected published date")
+	}
+	if articles[0].Description != "" || articles[0].Keywords != "" {
+		t.Fatalf("default parser unexpectedly collected metadata: %+v", articles[0])
+	}
+}
+
+func TestParseFeedMetadataOptionsAreIndependent(t *testing.T) {
+	feed := `<?xml version="1.0"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel>
+<title>Metadata</title><item><title>First</title><link>https://example.com/1</link>
+<description><![CDATA[<p>First &amp; useful paragraph.</p><p>Ignored.</p>]]></description>
+<content:encoded><![CDATA[<p>Content fallback.</p>]]></content:encoded>
+<keyword>alpha</keyword><keyword> beta </keyword><keyword> </keyword></item></channel></rss>`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(feed))
+	}))
+	defer server.Close()
+
+	tests := []struct {
+		name        string
+		options     ParseOptions
+		description string
+		keywords    string
+	}{
+		{name: "disabled", options: ParseOptions{}},
+		{name: "description only", options: ParseOptions{StoreDescriptions: true, DescriptionMaxChars: 1000}, description: "First & useful paragraph."},
+		{name: "keywords only", options: ParseOptions{StoreKeywords: true}, keywords: "alpha,beta"},
+		{name: "combined", options: ParseOptions{StoreDescriptions: true, StoreKeywords: true, DescriptionMaxChars: 1000}, description: "First & useful paragraph.", keywords: "alpha,beta"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			articles, err := ParseFeedWithOptions(server.URL, 2*time.Second, "", test.options)
+			if err != nil {
+				t.Fatalf("parse feed: %v", err)
+			}
+			if len(articles) != 1 {
+				t.Fatalf("expected one article, got %d", len(articles))
+			}
+			if articles[0].Description != test.description || articles[0].Keywords != test.keywords {
+				t.Fatalf("unexpected metadata: %+v", articles[0])
+			}
+		})
+	}
+}
+
+func TestDescriptionSelectionAndNormalization(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+		content     string
+		want        string
+	}{
+		{name: "description wins", description: `<p>Preferred&nbsp;paragraph.</p><p>Later.</p>`, content: `<p>Fallback.</p>`, want: "Preferred paragraph."},
+		{name: "markup only falls back", description: `<p><script>ignore()</script> </p><style>p{}</style>`, content: `<p>Useful <strong>content</strong>.</p>`, want: "Useful content."},
+		{name: "plain text block", description: " First line\ncontinues.\n\nSecond block.", want: "First line continues."},
+		{name: "empty", description: "  ", content: `<script>ignore()</script>`, want: ""},
+		{name: "product hunt shaped atom content", content: `<p>Firebase for Agents</p><p>Discussion | Link</p>`, want: "Firebase for Agents"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := selectDescription(test.description, test.content, 1000); got != test.want {
+				t.Fatalf("expected %q, got %q", test.want, got)
+			}
+		})
+	}
+}
+
+func TestDescriptionCharacterLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		limit int
+		want  string
+	}{
+		{name: "unlimited", value: "one two three", limit: 0, want: "one two three"},
+		{name: "under limit", value: "short", limit: 5, want: "short"},
+		{name: "word boundary", value: "one two three", limit: 9, want: "one two…"},
+		{name: "single rune", value: "long", limit: 1, want: "…"},
+		{name: "unicode safe", value: "café crème brûlée", limit: 11, want: "café crème…"},
+		{name: "long word", value: "supercalifragilistic", limit: 6, want: "super…"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := limitAtWordBoundary(test.value, test.limit)
+			if got != test.want {
+				t.Fatalf("expected %q, got %q", test.want, got)
+			}
+			if test.limit > 0 && len([]rune(got)) > test.limit {
+				t.Fatalf("result exceeds %d characters: %q", test.limit, got)
+			}
+		})
+	}
+}
+
+func TestParseFeedKeywordAlignment(t *testing.T) {
+	feed := `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+<title>Alignment</title>
+<entry><title>Skipped</title><keyword>first</keyword></entry>
+<entry><title>Kept</title><link href="https://example.com/kept"/><keyword>second</keyword></entry>
+</feed>`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(feed))
+	}))
+	defer server.Close()
+
+	articles, err := ParseFeedWithOptions(server.URL, 2*time.Second, "", ParseOptions{StoreKeywords: true})
+	if err != nil {
+		t.Fatalf("parse feed: %v", err)
+	}
+	if len(articles) != 1 || articles[0].Keywords != "second" {
+		t.Fatalf("keywords did not stay aligned: %+v", articles)
+	}
+}
+
+func TestParseJSONFeedWithKeywordOption(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/feed+json")
+		_, _ = w.Write([]byte(`{"version":"https://jsonfeed.org/version/1.1","title":"JSON","items":[{"id":"1","url":"https://example.com/1","title":"One"}]}`))
+	}))
+	defer server.Close()
+
+	articles, err := ParseFeedWithOptions(server.URL, 2*time.Second, "", ParseOptions{StoreKeywords: true})
+	if err != nil {
+		t.Fatalf("parse JSON feed: %v", err)
+	}
+	if len(articles) != 1 || articles[0].Keywords != "" {
+		t.Fatalf("unexpected JSON feed result: %+v", articles)
+	}
+}
+
+func TestSupplementaryKeywordParserFailureIsIsolated(t *testing.T) {
+	if _, err := parseKeywordSets([]byte(`<rss><channel><item><keyword>broken`)); err == nil {
+		t.Fatal("expected malformed XML to fail supplementary parsing")
+	}
+}
+
+func TestParseFeedRejectsNegativeDescriptionLimit(t *testing.T) {
+	_, err := ParseFeedWithOptions("not a URL", time.Second, "", ParseOptions{StoreDescriptions: true, DescriptionMaxChars: -1})
+	if err == nil || !strings.Contains(err.Error(), "zero or greater") {
+		t.Fatalf("expected negative-limit error, got %v", err)
 	}
 }
 
