@@ -65,7 +65,7 @@ func TestScanBlogRSS(t *testing.T) {
 	}
 }
 
-func TestScanBlogStoresMetadataByDefault(t *testing.T) {
+func TestScanBlogDoesNotStoreMetadataByDefault(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(metadataFeed))
 	}))
@@ -86,8 +86,8 @@ func TestScanBlogStoresMetadataByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list articles: %v", err)
 	}
-	if len(articles) != 1 || articles[0].Description != "Stored description." || articles[0].Keywords != "" {
-		t.Fatalf("expected default description storage without keywords, got %+v", articles)
+	if len(articles) != 1 || articles[0].Description != "" || articles[0].Keywords != "" {
+		t.Fatalf("expected metadata to be disabled by default, got %+v", articles)
 	}
 }
 

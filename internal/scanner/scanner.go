@@ -199,7 +199,7 @@ func ScanBlogByNameWithOptions(db *storage.Database, name string, options Option
 
 func defaultOptions() Options {
 	return Options{
-		StoreDescriptions:   true,
+		StoreDescriptions:   false,
 		StoreKeywords:       false,
 		DescriptionMaxChars: 1000,
 	}

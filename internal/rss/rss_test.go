@@ -43,7 +43,7 @@ func TestParseFeed(t *testing.T) {
 	if articles[0].PublishedDate == nil {
 		t.Fatalf("expected published date")
 	}
-	if articles[0].Description != "Default description." || articles[0].Keywords != "" {
+	if articles[0].Description != "" || articles[0].Keywords != "" {
 		t.Fatalf("default parser did not apply metadata defaults: %+v", articles[0])
 	}
 }

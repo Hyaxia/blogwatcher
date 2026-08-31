@@ -19,7 +19,7 @@ const (
 
 func resolveScanOptions(cmd *cobra.Command, storeDescriptions bool, storeKeywords bool, descriptionMaxChars int) (scanner.Options, error) {
 	resolvedDescriptions, err := resolveBoolSetting(
-		cmd, "store-descriptions", storeDescriptions, storeDescriptionsEnv, true,
+		cmd, "store-descriptions", storeDescriptions, storeDescriptionsEnv, false,
 	)
 	if err != nil {
 		return scanner.Options{}, err

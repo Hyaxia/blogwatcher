@@ -48,7 +48,7 @@ func (e FeedParseError) Error() string {
 
 func ParseFeed(feedURL string, timeout time.Duration, userAgent string) ([]FeedArticle, error) {
 	return ParseFeedWithOptions(feedURL, timeout, userAgent, ParseOptions{
-		StoreDescriptions:   true,
+		StoreDescriptions:   false,
 		StoreKeywords:       false,
 		DescriptionMaxChars: defaultDescriptionMaxChars,
 	})

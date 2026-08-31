@@ -19,7 +19,7 @@ func TestResolveScanOptionsDefaults(t *testing.T) {
 		t.Fatalf("resolve defaults: %v", err)
 	}
 	want := scanner.Options{
-		StoreDescriptions:   true,
+		StoreDescriptions:   false,
 		StoreKeywords:       false,
 		DescriptionMaxChars: defaultDescriptionMax,
 	}
