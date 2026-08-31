@@ -128,12 +128,19 @@ func newBlogsCommand() *cobra.Command {
 func newScanCommand() *cobra.Command {
 	var silent bool
 	var workers int
+	var storeDescriptions bool
+	var storeKeywords bool
+	var descriptionMaxChars int
 
 	cmd := &cobra.Command{
 		Use:   "scan [blog_name]",
 		Short: "Scan blogs for new articles.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			scanOptions, err := resolveScanOptions(cmd, storeDescriptions, storeKeywords, descriptionMaxChars)
+			if err != nil {
+				return err
+			}
 			db, err := storage.OpenDatabase("")
 			if err != nil {
 				return err
@@ -141,7 +148,7 @@ func newScanCommand() *cobra.Command {
 			defer db.Close()
 
 			if len(args) == 1 {
-				result, err := scanner.ScanBlogByName(db, args[0])
+				result, err := scanner.ScanBlogByNameWithOptions(db, args[0], scanOptions)
 				if err != nil {
 					return err
 				}
@@ -165,7 +172,7 @@ func newScanCommand() *cobra.Command {
 				if !silent {
 					color.New(color.FgCyan).Printf("Scanning %d blog(s)...\n\n", len(blogs))
 				}
-				results, err := scanner.ScanAllBlogs(db, workers)
+				results, err := scanner.ScanAllBlogsWithOptions(db, workers, scanOptions)
 				if err != nil {
 					return err
 				}
@@ -194,12 +201,17 @@ func newScanCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&silent, "silent", "s", false, "Only output 'scan done' when complete")
 	cmd.Flags().IntVarP(&workers, "workers", "w", 8, "Number of concurrent workers when scanning all blogs")
+	cmd.Flags().BoolVar(&storeDescriptions, "store-descriptions", false, "Store article descriptions (or set BLOGWATCHER_STORE_DESCRIPTIONS=true)")
+	cmd.Flags().BoolVar(&storeKeywords, "store-keywords", false, "Store repeated article keywords (or set BLOGWATCHER_STORE_KEYWORDS=true)")
+	cmd.Flags().IntVar(&descriptionMaxChars, "description-max-chars", defaultDescriptionMax, "Maximum stored description characters; 0 is unlimited (requires description storage)")
 	return cmd
 }
 
 func newArticlesCommand() *cobra.Command {
 	var showAll bool
 	var blogName string
+	var showDescriptions bool
+	var showKeywords bool
 
 	cmd := &cobra.Command{
 		Use:   "articles",
@@ -230,7 +242,7 @@ func newArticlesCommand() *cobra.Command {
 			}
 			color.New(color.FgCyan, color.Bold).Printf("%s (%d):\n\n", label, len(articles))
 			for _, article := range articles {
-				printArticle(article, blogNames[article.BlogID])
+				printArticle(article, blogNames[article.BlogID], showDescriptions, showKeywords)
 			}
 			return nil
 		},
@@ -238,6 +250,8 @@ func newArticlesCommand() *cobra.Command {
 
 	cmd.Flags().BoolVarP(&showAll, "all", "a", false, "Show all articles (including read)")
 	cmd.Flags().StringVarP(&blogName, "blog", "b", "", "Filter by blog name")
+	cmd.Flags().BoolVar(&showDescriptions, "show-descriptions", false, "Show stored article descriptions")
+	cmd.Flags().BoolVar(&showKeywords, "show-keywords", false, "Show stored article keywords")
 	return cmd
 }
 
@@ -380,7 +394,7 @@ func printScanResult(result scanner.ScanResult) {
 	color.New(statusColor).Printf("New: %d\n", result.NewArticles)
 }
 
-func printArticle(article model.Article, blogName string) {
+func printArticle(article model.Article, blogName string, showDescriptions bool, showKeywords bool) {
 	status := color.New(color.FgYellow).Sprint("[new]")
 	if article.IsRead {
 		status = color.New(color.FgHiBlack).Sprint("[read]")
@@ -391,6 +405,12 @@ func printArticle(article model.Article, blogName string) {
 	fmt.Printf("       URL: %s\n", article.URL)
 	if article.PublishedDate != nil {
 		fmt.Printf("       Published: %s\n", article.PublishedDate.Format("2006-01-02"))
+	}
+	if showKeywords && article.Keywords != "" {
+		fmt.Printf("       Keywords: %s\n", article.Keywords)
+	}
+	if showDescriptions && article.Description != "" {
+		fmt.Printf("       Description: %s\n", article.Description)
 	}
 	fmt.Println()
 }

@@ -1,13 +1,19 @@
 package rss
 
 import (
+	"bytes"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
@@ -17,7 +23,20 @@ type FeedArticle struct {
 	Title         string
 	URL           string
 	PublishedDate *time.Time
+	Keywords      string
+	Description   string
 }
+
+type ParseOptions struct {
+	StoreDescriptions   bool
+	StoreKeywords       bool
+	DescriptionMaxChars int
+}
+
+const (
+	defaultDescriptionMaxChars int   = 1000
+	maxBufferedFeedBytes       int64 = 10 << 20
+)
 
 type FeedParseError struct {
 	Message string
@@ -28,6 +47,18 @@ func (e FeedParseError) Error() string {
 }
 
 func ParseFeed(feedURL string, timeout time.Duration, userAgent string) ([]FeedArticle, error) {
+	return ParseFeedWithOptions(feedURL, timeout, userAgent, ParseOptions{
+		StoreDescriptions:   false,
+		StoreKeywords:       false,
+		DescriptionMaxChars: defaultDescriptionMaxChars,
+	})
+}
+
+func ParseFeedWithOptions(feedURL string, timeout time.Duration, userAgent string, options ParseOptions) ([]FeedArticle, error) {
+	if options.StoreDescriptions && options.DescriptionMaxChars < 0 {
+		return nil, FeedParseError{Message: "description maximum must be zero or greater"}
+	}
+
 	client := &http.Client{Timeout: timeout}
 	response, err := getWithOptionalUserAgent(client, feedURL, userAgent)
 	if err != nil {
@@ -38,27 +69,207 @@ func ParseFeed(feedURL string, timeout time.Duration, userAgent string) ([]FeedA
 		return nil, FeedParseError{Message: fmt.Sprintf("failed to fetch feed: status %d", response.StatusCode)}
 	}
 
+	var (
+		feed        *gofeed.Feed
+		keywordSets [][]string
+		keywordBody boundedKeywordFeedBuffer
+	)
 	parser := gofeed.NewParser()
-	feed, err := parser.Parse(response.Body)
+	if options.StoreKeywords {
+		feed, err = parser.Parse(io.TeeReader(response.Body, &keywordBody))
+		if err == nil && !keywordBody.exceeded {
+			// Keyword extraction is supplementary. A failure here must not regress
+			// a feed that gofeed parsed successfully.
+			keywordSets, _ = parseKeywordSets(keywordBody.Bytes())
+		}
+	} else {
+		feed, err = parser.Parse(response.Body)
+	}
 	if err != nil {
 		return nil, FeedParseError{Message: fmt.Sprintf("failed to parse feed: %v", err)}
 	}
 
-	var articles []FeedArticle
-	for _, item := range feed.Items {
+	articles := make([]FeedArticle, 0, len(feed.Items))
+	for index, item := range feed.Items {
 		title := strings.TrimSpace(item.Title)
 		link := strings.TrimSpace(item.Link)
 		if title == "" || link == "" {
 			continue
 		}
-		articles = append(articles, FeedArticle{
+
+		article := FeedArticle{
 			Title:         title,
 			URL:           link,
 			PublishedDate: pickPublishedDate(item),
-		})
+		}
+		if options.StoreKeywords && index < len(keywordSets) {
+			article.Keywords = strings.Join(keywordSets[index], ",")
+		}
+		if options.StoreDescriptions {
+			article.Description = selectDescription(item.Description, item.Content, options.DescriptionMaxChars)
+		}
+		articles = append(articles, article)
 	}
 
 	return articles, nil
+}
+
+type boundedKeywordFeedBuffer struct {
+	body     bytes.Buffer
+	exceeded bool
+}
+
+func (buffer *boundedKeywordFeedBuffer) Write(data []byte) (int, error) {
+	if buffer.exceeded {
+		return len(data), nil
+	}
+	remaining := maxBufferedFeedBytes - int64(buffer.body.Len())
+	if int64(len(data)) > remaining {
+		if remaining > 0 {
+			_, _ = buffer.body.Write(data[:int(remaining)])
+		}
+		buffer.exceeded = true
+		return len(data), nil
+	}
+	_, err := buffer.body.Write(data)
+	return len(data), err
+}
+
+func (buffer *boundedKeywordFeedBuffer) Bytes() []byte {
+	return buffer.body.Bytes()
+}
+
+func parseKeywordSets(body []byte) ([][]string, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(body))
+	var (
+		sets           [][]string
+		current        []string
+		keywordText    strings.Builder
+		depth          int
+		containerDepth int
+		keywordDepth   int
+	)
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return sets, nil
+			}
+			return nil, err
+		}
+
+		switch element := token.(type) {
+		case xml.StartElement:
+			depth++
+			if containerDepth == 0 && (element.Name.Local == "item" || element.Name.Local == "entry") {
+				containerDepth = depth
+				current = nil
+				continue
+			}
+			if containerDepth > 0 && depth == containerDepth+1 && element.Name.Local == "keyword" {
+				keywordDepth = depth
+				keywordText.Reset()
+			}
+		case xml.CharData:
+			if keywordDepth > 0 {
+				keywordText.Write([]byte(element))
+			}
+		case xml.EndElement:
+			if keywordDepth == depth && element.Name.Local == "keyword" {
+				if keyword := strings.TrimSpace(keywordText.String()); keyword != "" {
+					current = append(current, keyword)
+				}
+				keywordDepth = 0
+			}
+			if containerDepth == depth && (element.Name.Local == "item" || element.Name.Local == "entry") {
+				sets = append(sets, current)
+				containerDepth = 0
+				current = nil
+			}
+			depth--
+		}
+	}
+}
+
+var blankLinePattern = regexp.MustCompile(`\r?\n[\t ]*\r?\n+`)
+
+func selectDescription(description string, content string, maxChars int) string {
+	selected := firstMeaningfulParagraph(description)
+	if selected == "" {
+		selected = firstMeaningfulParagraph(content)
+	}
+	return limitAtWordBoundary(selected, maxChars)
+}
+
+func firstMeaningfulParagraph(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	if !strings.Contains(raw, "<") {
+		blocks := blankLinePattern.Split(html.UnescapeString(raw), -1)
+		for _, block := range blocks {
+			if text := normalizeWhitespace(block); text != "" {
+				return text
+			}
+		}
+		return ""
+	}
+
+	document, err := goquery.NewDocumentFromReader(strings.NewReader(raw))
+	if err != nil {
+		return normalizeWhitespace(html.UnescapeString(raw))
+	}
+	document.Find("script, style").Remove()
+
+	var paragraph string
+	document.Find("p").EachWithBreak(func(_ int, selection *goquery.Selection) bool {
+		paragraph = normalizeWhitespace(selection.Text())
+		return paragraph == ""
+	})
+	if paragraph != "" {
+		return paragraph
+	}
+	return normalizeWhitespace(document.Text())
+}
+
+func normalizeWhitespace(value string) string {
+	return strings.Join(strings.Fields(html.UnescapeString(value)), " ")
+}
+
+func limitAtWordBoundary(value string, maxChars int) string {
+	if value == "" || maxChars == 0 {
+		return value
+	}
+	runes := []rune(value)
+	if len(runes) <= maxChars {
+		return value
+	}
+	if maxChars == 1 {
+		return "…"
+	}
+
+	cutoff := maxChars - 1
+	boundary := cutoff
+	foundBoundary := unicode.IsSpace(runes[cutoff])
+	lookbackStart := max(cutoff-32, 0)
+	for index := cutoff - 1; !foundBoundary && index >= lookbackStart; index-- {
+		switch {
+		case unicode.IsPunct(runes[index]):
+			boundary = index + 1
+			foundBoundary = true
+		case unicode.IsSpace(runes[index]):
+			boundary = index
+			foundBoundary = true
+		}
+	}
+	prefix := strings.TrimSpace(string(runes[:boundary]))
+	if prefix == "" {
+		prefix = string(runes[:cutoff])
+	}
+	return prefix + "…"
 }
 
 func DiscoverFeedURL(blogURL string, timeout time.Duration, userAgent string) (string, error) {
@@ -73,10 +284,8 @@ func DiscoverFeedURL(blogURL string, timeout time.Duration, userAgent string) (s
 	}
 
 	contentType := response.Header.Get("Content-Type")
-	// If the URL already returns a feed content-type, validate and return it directly
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err == nil {
-		// Only accept explicit feed types, not generic XML (to avoid sitemap false positives)
 		if mediaType == "application/rss+xml" || mediaType == "application/atom+xml" || mediaType == "application/feed+json" {
 			return blogURL, nil
 		}
@@ -101,11 +310,8 @@ func DiscoverFeedURL(blogURL string, timeout time.Duration, userAgent string) (s
 	}
 
 	for _, feedType := range feedTypes {
-		// Use token matching for rel (rel~='value' matches rel as space-separated token)
-		// Use case-insensitive type matching [type~='value']
 		selection := doc.Find(fmt.Sprintf("link[rel~='alternate'][type~='%s']", feedType)).First()
 		if selection.Length() == 0 {
-			// Also check rel="self" for feeds that use self-referencing links (e.g. TechCrunch tag feeds)
 			selection = doc.Find(fmt.Sprintf("link[rel~='self'][type~='%s']", feedType)).First()
 		}
 		if selection.Length() == 0 {

@@ -26,6 +26,13 @@ const sampleFeed = `<?xml version="1.0" encoding="UTF-8" ?>
 </channel>
 </rss>`
 
+const metadataFeed = `<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"><channel><title>Metadata Feed</title><item>
+<title>Metadata article</title><link>https://example.com/metadata</link>
+<description><![CDATA[<p>Stored description.</p>]]></description>
+<keyword>go</keyword><keyword>rss</keyword>
+</item></channel></rss>`
+
 func TestScanBlogRSS(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -55,6 +62,103 @@ func TestScanBlogRSS(t *testing.T) {
 	}
 	if len(articles) != 2 {
 		t.Fatalf("expected 2 articles")
+	}
+}
+
+func TestScanBlogDoesNotStoreMetadataByDefault(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(metadataFeed))
+	}))
+	defer server.Close()
+
+	db := openTestDB(t)
+	defer db.Close()
+	blog, err := db.AddBlog(model.Blog{Name: "Test", URL: "https://example.com", FeedURL: server.URL})
+	if err != nil {
+		t.Fatalf("add blog: %v", err)
+	}
+
+	result := ScanBlog(db, blog)
+	if result.Error != "" || result.NewArticles != 1 {
+		t.Fatalf("unexpected scan result: %+v", result)
+	}
+	articles, err := db.ListArticles(false, nil)
+	if err != nil {
+		t.Fatalf("list articles: %v", err)
+	}
+	if len(articles) != 1 || articles[0].Description != "" || articles[0].Keywords != "" {
+		t.Fatalf("expected metadata to be disabled by default, got %+v", articles)
+	}
+}
+
+func TestScanBlogMetadataOptionsAreIndependent(t *testing.T) {
+	tests := []struct {
+		name        string
+		options     Options
+		description string
+		keywords    string
+	}{
+		{name: "disabled"},
+		{name: "description only", options: Options{StoreDescriptions: true, DescriptionMaxChars: 1000}, description: "Stored description."},
+		{name: "keywords only", options: Options{StoreKeywords: true}, keywords: "go,rss"},
+		{name: "combined", options: Options{StoreDescriptions: true, StoreKeywords: true, DescriptionMaxChars: 1000}, description: "Stored description.", keywords: "go,rss"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(metadataFeed))
+			}))
+			defer server.Close()
+
+			db := openTestDB(t)
+			defer db.Close()
+			blog, err := db.AddBlog(model.Blog{Name: test.name, URL: "https://example.com/" + test.name, FeedURL: server.URL})
+			if err != nil {
+				t.Fatalf("add blog: %v", err)
+			}
+
+			result := ScanBlogWithOptions(db, blog, test.options)
+			if result.Error != "" || result.NewArticles != 1 {
+				t.Fatalf("unexpected scan result: %+v", result)
+			}
+			articles, err := db.ListArticles(false, nil)
+			if err != nil {
+				t.Fatalf("list articles: %v", err)
+			}
+			if len(articles) != 1 || articles[0].Description != test.description || articles[0].Keywords != test.keywords {
+				t.Fatalf("unexpected stored metadata: %+v", articles)
+			}
+		})
+	}
+}
+
+func TestScanDoesNotBackfillKnownArticle(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(metadataFeed))
+	}))
+	defer server.Close()
+
+	db := openTestDB(t)
+	defer db.Close()
+	blog, err := db.AddBlog(model.Blog{Name: "Test", URL: "https://example.com", FeedURL: server.URL})
+	if err != nil {
+		t.Fatalf("add blog: %v", err)
+	}
+	article, err := db.AddArticle(model.Article{BlogID: blog.ID, Title: "Metadata article", URL: "https://example.com/metadata"})
+	if err != nil {
+		t.Fatalf("add article: %v", err)
+	}
+
+	result := ScanBlogWithOptions(db, blog, Options{StoreDescriptions: true, StoreKeywords: true, DescriptionMaxChars: 1000})
+	if result.NewArticles != 0 {
+		t.Fatalf("expected known article to be skipped: %+v", result)
+	}
+	stored, err := db.GetArticle(article.ID)
+	if err != nil {
+		t.Fatalf("get article: %v", err)
+	}
+	if stored.Description != "" || stored.Keywords != "" {
+		t.Fatalf("known article was backfilled: %+v", stored)
 	}
 }
 

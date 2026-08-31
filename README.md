@@ -9,6 +9,7 @@ A Go CLI tool to track blog articles, detect new posts, and manage read/unread s
 -   **Read/Unread Management** - Track which articles you've read
 -   **Blog Filtering** - View articles from specific blogs
 -   **Duplicate Prevention** - Never tracks the same article twice
+-   **Optional Feed Metadata** - Store and display descriptions or keywords only when explicitly enabled
 -   **Colored CLI Output** - User-friendly terminal interface
 
 ## Installation
@@ -68,7 +69,30 @@ blogwatcher scan "Tech Blog"
 
 # Per-blog User-Agent is configured at add time via --user-agent
 # Example above: blogwatcher add ... --user-agent "Mozilla/5.0 ..."
+
+# Opt in to storing the first description/content paragraph
+blogwatcher scan --store-descriptions
+
+# Choose another character limit, or use 0 for no upper bound
+blogwatcher scan --store-descriptions --description-max-chars 500
+
+# Opt in to keyword collection when needed
+blogwatcher scan --store-keywords
+
+# Enable either setting for scheduled scans with environment variables
+BLOGWATCHER_STORE_DESCRIPTIONS=true BLOGWATCHER_DESCRIPTION_MAX_CHARS=500 blogwatcher scan
+BLOGWATCHER_STORE_KEYWORDS=true blogwatcher scan
 ```
+
+Description and keyword storage are disabled by default to avoid optional metadata parsing overhead. These settings affect only newly discovered articles: existing rows are not backfilled, and disabling a setting does not remove values already stored. Use `--store-descriptions` or `BLOGWATCHER_STORE_DESCRIPTIONS=true` to collect descriptions, and `--store-keywords` or `BLOGWATCHER_STORE_KEYWORDS=true` to collect keywords. Both environment settings use Go boolean syntax; `true` and `false` are recommended, while standard forms such as `1`, `0`, `TRUE`, and `FALSE` are also accepted. Command-line flags override environment settings.
+
+> **Performance disclaimer:** Both metadata paths are opt in because benchmarks showed that description extraction alone increased median parsing time by roughly 37–48% and memory use by about 44%. Enabling descriptions and keywords together increased parsing time by roughly 102–140%, memory use by about 63%, and allocations by about 57%. These measurements were taken on an Apple M1 using synthetic feeds and cover parsing only; actual results vary by hardware and feed content, and exclude network and database work.
+
+`BLOGWATCHER_DESCRIPTION_MAX_CHARS` defaults to `1000` when description storage is enabled. A value of `0` removes the upper bound; negative values are invalid. Supplying a description limit while description storage is disabled is treated as incomplete configuration.
+
+When description storage is enabled, BlogWatcher keeps the first meaningful paragraph from the feed description, falling back to the first meaningful content paragraph. It decodes HTML entities, removes scripts and styles, and normalizes whitespace. The character limit counts Unicode characters rather than bytes; truncation prefers nearby whitespace or punctuation and otherwise uses the exact character boundary. The final ellipsis is included in the configured maximum.
+
+Keyword extraction buffers at most 10 MiB of decompressed feed data. For a larger feed, keyword extraction is skipped while the feed's articles continue to be parsed. Scans without keyword storage use the direct feed parser.
 
 ### Viewing Articles
 
@@ -81,7 +105,14 @@ blogwatcher articles --all
 
 # List articles from a specific blog
 blogwatcher articles --blog "Tech Blog"
+
+# Opt in to displaying stored metadata (independently or together)
+blogwatcher articles --show-descriptions
+blogwatcher articles --show-keywords
+blogwatcher articles --show-descriptions --show-keywords
 ```
+
+Without either display flag, `blogwatcher articles` retains its original output format. Requested fields are omitted on rows where no value was stored.
 
 ### Managing Read Status
 
@@ -142,7 +173,9 @@ With `BLOGWATCHER_DB` unset or empty, BlogWatcher falls back to the default path
 Database tables:
 
 -   **blogs** - Tracked blogs (name, URL, feed URL, scrape selector)
--   **articles** - Discovered articles (title, URL, dates, read status)
+-   **articles** - Discovered articles (title, URL, dates, read status, and nullable description and keyword fields)
+
+The nullable metadata columns are always added through an additive migration, but remain `NULL` for new articles unless their corresponding scan option is enabled. Older BlogWatcher binaries safely ignore these columns.
 
 ## Development
 
