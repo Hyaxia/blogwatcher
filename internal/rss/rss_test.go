@@ -1,7 +1,6 @@
 package rss
 
 import (
-	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +16,8 @@ const sampleFeed = `<?xml version="1.0" encoding="UTF-8" ?>
 <title>First</title>
 <link>https://example.com/1</link>
 <pubDate>Mon, 02 Jan 2006 15:04:05 GMT</pubDate>
+<description>Default description.</description>
+<keyword>default</keyword>
 </item>
 <item>
 <title>Second</title>
@@ -42,8 +43,8 @@ func TestParseFeed(t *testing.T) {
 	if articles[0].PublishedDate == nil {
 		t.Fatalf("expected published date")
 	}
-	if articles[0].Description != "" || articles[0].Keywords != "" {
-		t.Fatalf("default parser unexpectedly collected metadata: %+v", articles[0])
+	if articles[0].Description != "Default description." || articles[0].Keywords != "" {
+		t.Fatalf("default parser did not apply metadata defaults: %+v", articles[0])
 	}
 }
 
@@ -85,20 +86,26 @@ func TestParseFeedMetadataOptionsAreIndependent(t *testing.T) {
 	}
 }
 
-func TestReadBufferedFeedLimit(t *testing.T) {
-	exact := bytes.NewReader(bytes.Repeat([]byte{'x'}, int(maxBufferedFeedBytes)))
-	body, err := readBufferedFeed(exact)
-	if err != nil {
-		t.Fatalf("read feed at limit: %v", err)
-	}
-	if int64(len(body)) != maxBufferedFeedBytes {
-		t.Fatalf("expected %d bytes, got %d", maxBufferedFeedBytes, len(body))
-	}
+func TestParseFeedKeywordLimitKeepsArticles(t *testing.T) {
+	largeDescription := strings.Repeat("x", int(maxBufferedFeedBytes)+1)
+	feed := `<?xml version="1.0"?><rss version="2.0"><channel>` +
+		`<title>Large feed</title><item><title>Kept</title>` +
+		`<link>https://example.com/kept</link><keyword>omitted</keyword><description>` +
+		largeDescription + `</description></item></channel></rss>`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(feed))
+	}))
+	defer server.Close()
 
-	overLimit := bytes.NewReader(bytes.Repeat([]byte{'x'}, int(maxBufferedFeedBytes+1)))
-	_, err = readBufferedFeed(overLimit)
-	if err == nil || !strings.Contains(err.Error(), "exceeds 10 MiB limit") {
-		t.Fatalf("expected clear oversized-feed error, got %v", err)
+	articles, err := ParseFeedWithOptions(server.URL, 2*time.Second, "", ParseOptions{StoreKeywords: true})
+	if err != nil {
+		t.Fatalf("oversized feed should still parse: %v", err)
+	}
+	if len(articles) != 1 {
+		t.Fatalf("expected one article, got %d", len(articles))
+	}
+	if articles[0].Title != "Kept" || articles[0].Keywords != "" {
+		t.Fatalf("expected article without keywords, got %+v", articles[0])
 	}
 }
 

@@ -70,27 +70,29 @@ blogwatcher scan "Tech Blog"
 # Per-blog User-Agent is configured at add time via --user-agent
 # Example above: blogwatcher add ... --user-agent "Mozilla/5.0 ..."
 
-# Opt in to storing the first description/content paragraph (limited to 1,000 characters by default)
-blogwatcher scan --store-descriptions
+# Descriptions are stored by default. The first description/content paragraph is
+# limited to 1,000 characters by default; keyword collection is opt in.
+blogwatcher scan
 
 # Choose another character limit, or use 0 for no upper bound
-blogwatcher scan --store-descriptions --description-max-chars 500
+blogwatcher scan --description-max-chars 500
 
-# Store feed keywords independently
+# Opt in to keyword collection when needed
 blogwatcher scan --store-keywords
 
-# The equivalent environment settings are useful for scheduled scans
-BLOGWATCHER_STORE_DESCRIPTIONS=true BLOGWATCHER_DESCRIPTION_MAX_CHARS=500 blogwatcher scan
-BLOGWATCHER_STORE_KEYWORDS=true blogwatcher scan
+# The description limit environment setting is useful for scheduled scans
+BLOGWATCHER_DESCRIPTION_MAX_CHARS=500 blogwatcher scan
 ```
 
-Description and keyword storage are disabled by default. These settings affect only newly discovered articles: existing rows are not backfilled, and disabling a setting does not remove values already stored. `BLOGWATCHER_STORE_DESCRIPTIONS` and `BLOGWATCHER_STORE_KEYWORDS` use Go boolean syntax; `true` and `false` are recommended, while standard forms such as `1`, `0`, `TRUE`, and `FALSE` are also accepted. Command-line flags override environment settings.
+Description storage is enabled by default, while keyword storage is disabled by default because keyword extraction adds parsing overhead. These settings affect only newly discovered articles: existing rows are not backfilled, and disabling a setting does not remove values already stored. Use `--store-keywords` or `BLOGWATCHER_STORE_KEYWORDS=true` to collect keywords. `BLOGWATCHER_STORE_DESCRIPTIONS` and `BLOGWATCHER_STORE_KEYWORDS` use Go boolean syntax; `true` and `false` are recommended, while standard forms such as `1`, `0`, `TRUE`, and `FALSE` are also accepted. Command-line flags override environment settings.
 
-`BLOGWATCHER_DESCRIPTION_MAX_CHARS` defaults to `1000` after description storage is enabled. A value of `0` removes the upper bound; negative values are invalid. Supplying a description limit without enabling description storage is treated as incomplete configuration.
+> **Performance disclaimer:** Keyword extraction is disabled by default because benchmark results showed a median parsing slowdown of about 57% for feeds around 65 KiB and 1 MiB, and about 31% for an 8 MiB feed. Keyword mode also used roughly 18–19% more memory and 30% more allocations. These measurements were taken on an Apple M1 and cover parsing only; actual results vary by hardware and feed content, and exclude network and database work.
 
-When description storage is enabled, BlogWatcher keeps the first meaningful paragraph from the feed description, falling back to the first meaningful content paragraph. It decodes HTML entities, removes scripts and styles, and normalizes whitespace. The character limit counts Unicode characters rather than bytes; truncation prefers nearby whitespace or punctuation and otherwise uses the exact character boundary. The final ellipsis is included in the configured maximum.
+`BLOGWATCHER_DESCRIPTION_MAX_CHARS` defaults to `1000`. A value of `0` removes the upper bound; negative values are invalid. Supplying a description limit while explicitly disabling description storage is treated as incomplete configuration.
 
-Keyword extraction buffers at most 10 MiB of decompressed feed data. A larger feed is rejected with an error when keyword storage is enabled; scans without keyword storage continue to use the direct feed parser.
+For each new feed article, BlogWatcher keeps the first meaningful paragraph from the feed description, falling back to the first meaningful content paragraph. It decodes HTML entities, removes scripts and styles, and normalizes whitespace. The character limit counts Unicode characters rather than bytes; truncation prefers nearby whitespace or punctuation and otherwise uses the exact character boundary. The final ellipsis is included in the configured maximum.
+
+Keyword extraction buffers at most 10 MiB of decompressed feed data. For a larger feed, keyword extraction is skipped while the feed's articles continue to be parsed. Scans without keyword storage use the direct feed parser.
 
 ### Viewing Articles
 

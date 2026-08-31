@@ -18,7 +18,11 @@ func TestResolveScanOptionsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve defaults: %v", err)
 	}
-	want := scanner.Options{DescriptionMaxChars: defaultDescriptionMax}
+	want := scanner.Options{
+		StoreDescriptions:   true,
+		StoreKeywords:       false,
+		DescriptionMaxChars: defaultDescriptionMax,
+	}
 	if options != want {
 		t.Fatalf("expected %+v, got %+v", want, options)
 	}
@@ -95,8 +99,8 @@ func TestResolveScanOptionsRejectsInvalidConfiguration(t *testing.T) {
 	}{
 		{name: "invalid description boolean", env: map[string]string{storeDescriptionsEnv: "sometimes"}, want: "must be true or false"},
 		{name: "invalid keyword boolean", env: map[string]string{storeKeywordsEnv: "sometimes"}, want: "must be true or false"},
-		{name: "limit flag without opt in", args: []string{"--description-max-chars=20"}, want: "requires description storage"},
-		{name: "limit environment without opt in", env: map[string]string{descriptionMaxCharsEnv: "20"}, want: "requires description storage"},
+		{name: "limit flag when disabled", args: []string{"--store-descriptions=false", "--description-max-chars=20"}, want: "requires description storage"},
+		{name: "limit environment when disabled", env: map[string]string{storeDescriptionsEnv: "false", descriptionMaxCharsEnv: "20"}, want: "requires description storage"},
 		{name: "invalid limit", env: map[string]string{storeDescriptionsEnv: "true", descriptionMaxCharsEnv: "many"}, want: "must be an integer"},
 		{name: "negative limit", args: []string{"--store-descriptions", "--description-max-chars=-1"}, want: "zero or greater"},
 	}

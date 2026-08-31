@@ -33,7 +33,10 @@ type ParseOptions struct {
 	DescriptionMaxChars int
 }
 
-const maxBufferedFeedBytes int64 = 10 << 20
+const (
+	defaultDescriptionMaxChars int   = 1000
+	maxBufferedFeedBytes       int64 = 10 << 20
+)
 
 type FeedParseError struct {
 	Message string
@@ -44,7 +47,11 @@ func (e FeedParseError) Error() string {
 }
 
 func ParseFeed(feedURL string, timeout time.Duration, userAgent string) ([]FeedArticle, error) {
-	return ParseFeedWithOptions(feedURL, timeout, userAgent, ParseOptions{})
+	return ParseFeedWithOptions(feedURL, timeout, userAgent, ParseOptions{
+		StoreDescriptions:   true,
+		StoreKeywords:       false,
+		DescriptionMaxChars: defaultDescriptionMaxChars,
+	})
 }
 
 func ParseFeedWithOptions(feedURL string, timeout time.Duration, userAgent string, options ParseOptions) ([]FeedArticle, error) {
@@ -65,18 +72,15 @@ func ParseFeedWithOptions(feedURL string, timeout time.Duration, userAgent strin
 	var (
 		feed        *gofeed.Feed
 		keywordSets [][]string
+		keywordBody boundedKeywordFeedBuffer
 	)
 	parser := gofeed.NewParser()
 	if options.StoreKeywords {
-		body, readErr := readBufferedFeed(response.Body)
-		if readErr != nil {
-			return nil, FeedParseError{Message: fmt.Sprintf("failed to read feed: %v", readErr)}
-		}
-		feed, err = parser.Parse(bytes.NewReader(body))
-		if err == nil {
+		feed, err = parser.Parse(io.TeeReader(response.Body, &keywordBody))
+		if err == nil && !keywordBody.exceeded {
 			// Keyword extraction is supplementary. A failure here must not regress
 			// a feed that gofeed parsed successfully.
-			keywordSets, _ = parseKeywordSets(body)
+			keywordSets, _ = parseKeywordSets(keywordBody.Bytes())
 		}
 	} else {
 		feed, err = parser.Parse(response.Body)
@@ -110,15 +114,29 @@ func ParseFeedWithOptions(feedURL string, timeout time.Duration, userAgent strin
 	return articles, nil
 }
 
-func readBufferedFeed(reader io.Reader) ([]byte, error) {
-	body, err := io.ReadAll(io.LimitReader(reader, maxBufferedFeedBytes+1))
-	if err != nil {
-		return nil, err
+type boundedKeywordFeedBuffer struct {
+	body     bytes.Buffer
+	exceeded bool
+}
+
+func (buffer *boundedKeywordFeedBuffer) Write(data []byte) (int, error) {
+	if buffer.exceeded {
+		return len(data), nil
 	}
-	if int64(len(body)) > maxBufferedFeedBytes {
-		return nil, errors.New("feed exceeds 10 MiB limit for keyword extraction")
+	remaining := maxBufferedFeedBytes - int64(buffer.body.Len())
+	if int64(len(data)) > remaining {
+		if remaining > 0 {
+			_, _ = buffer.body.Write(data[:int(remaining)])
+		}
+		buffer.exceeded = true
+		return len(data), nil
 	}
-	return body, nil
+	_, err := buffer.body.Write(data)
+	return len(data), err
+}
+
+func (buffer *boundedKeywordFeedBuffer) Bytes() []byte {
+	return buffer.body.Bytes()
 }
 
 func parseKeywordSets(body []byte) ([][]string, error) {

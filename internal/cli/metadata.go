@@ -18,11 +18,15 @@ const (
 )
 
 func resolveScanOptions(cmd *cobra.Command, storeDescriptions bool, storeKeywords bool, descriptionMaxChars int) (scanner.Options, error) {
-	resolvedDescriptions, err := resolveBoolSetting(cmd, "store-descriptions", storeDescriptions, storeDescriptionsEnv)
+	resolvedDescriptions, err := resolveBoolSetting(
+		cmd, "store-descriptions", storeDescriptions, storeDescriptionsEnv, true,
+	)
 	if err != nil {
 		return scanner.Options{}, err
 	}
-	resolvedKeywords, err := resolveBoolSetting(cmd, "store-keywords", storeKeywords, storeKeywordsEnv)
+	resolvedKeywords, err := resolveBoolSetting(
+		cmd, "store-keywords", storeKeywords, storeKeywordsEnv, false,
+	)
 	if err != nil {
 		return scanner.Options{}, err
 	}
@@ -56,13 +60,19 @@ func resolveScanOptions(cmd *cobra.Command, storeDescriptions bool, storeKeyword
 	}, nil
 }
 
-func resolveBoolSetting(cmd *cobra.Command, flagName string, flagValue bool, environmentName string) (bool, error) {
+func resolveBoolSetting(
+	cmd *cobra.Command,
+	flagName string,
+	flagValue bool,
+	environmentName string,
+	defaultValue bool,
+) (bool, error) {
 	if cmd.Flags().Changed(flagName) {
 		return flagValue, nil
 	}
 	raw, ok := nonEmptyEnvironment(environmentName)
 	if !ok {
-		return false, nil
+		return defaultValue, nil
 	}
 	parsed, err := strconv.ParseBool(raw)
 	if err != nil {

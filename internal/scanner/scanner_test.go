@@ -65,7 +65,33 @@ func TestScanBlogRSS(t *testing.T) {
 	}
 }
 
-func TestScanBlogMetadataStorageIsOptInAndIndependent(t *testing.T) {
+func TestScanBlogStoresMetadataByDefault(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(metadataFeed))
+	}))
+	defer server.Close()
+
+	db := openTestDB(t)
+	defer db.Close()
+	blog, err := db.AddBlog(model.Blog{Name: "Test", URL: "https://example.com", FeedURL: server.URL})
+	if err != nil {
+		t.Fatalf("add blog: %v", err)
+	}
+
+	result := ScanBlog(db, blog)
+	if result.Error != "" || result.NewArticles != 1 {
+		t.Fatalf("unexpected scan result: %+v", result)
+	}
+	articles, err := db.ListArticles(false, nil)
+	if err != nil {
+		t.Fatalf("list articles: %v", err)
+	}
+	if len(articles) != 1 || articles[0].Description != "Stored description." || articles[0].Keywords != "" {
+		t.Fatalf("expected default description storage without keywords, got %+v", articles)
+	}
+}
+
+func TestScanBlogMetadataOptionsAreIndependent(t *testing.T) {
 	tests := []struct {
 		name        string
 		options     Options

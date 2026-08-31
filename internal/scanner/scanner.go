@@ -26,7 +26,7 @@ type Options struct {
 }
 
 func ScanBlog(db *storage.Database, blog model.Blog) ScanResult {
-	return ScanBlogWithOptions(db, blog, Options{})
+	return ScanBlogWithOptions(db, blog, defaultOptions())
 }
 
 func ScanBlogWithOptions(db *storage.Database, blog model.Blog, options Options) ScanResult {
@@ -128,7 +128,7 @@ func ScanBlogWithOptions(db *storage.Database, blog model.Blog, options Options)
 }
 
 func ScanAllBlogs(db *storage.Database, workers int) ([]ScanResult, error) {
-	return ScanAllBlogsWithOptions(db, workers, Options{})
+	return ScanAllBlogsWithOptions(db, workers, defaultOptions())
 }
 
 func ScanAllBlogsWithOptions(db *storage.Database, workers int, options Options) ([]ScanResult, error) {
@@ -182,7 +182,7 @@ func ScanAllBlogsWithOptions(db *storage.Database, workers int, options Options)
 }
 
 func ScanBlogByName(db *storage.Database, name string) (*ScanResult, error) {
-	return ScanBlogByNameWithOptions(db, name, Options{})
+	return ScanBlogByNameWithOptions(db, name, defaultOptions())
 }
 
 func ScanBlogByNameWithOptions(db *storage.Database, name string, options Options) (*ScanResult, error) {
@@ -195,6 +195,14 @@ func ScanBlogByNameWithOptions(db *storage.Database, name string, options Option
 	}
 	result := ScanBlogWithOptions(db, *blog, options)
 	return &result, nil
+}
+
+func defaultOptions() Options {
+	return Options{
+		StoreDescriptions:   true,
+		StoreKeywords:       false,
+		DescriptionMaxChars: 1000,
+	}
 }
 
 func convertFeedArticles(blogID int64, articles []rss.FeedArticle) []model.Article {
